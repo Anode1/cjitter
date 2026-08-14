@@ -79,9 +79,27 @@ and crossings at 100, edge length at 1, so length only ever breaks ties.
 2. **The `.mwb` reader.** `example/erd` builds its graph in code. A real `.mwb` is a zip around
    `document.mwb.xml`; a grep for `key="left" type="real"` finds nothing, so the first task is
    mapping where `db.mysql.Table` objects and the diagram figure positions live and how they link.
-   The test case is `~/kul/doc/DataModel/ERD.mwb`: 44 tables, with `ERD.png` and `ERD_prev.png` to
-   judge output against, and credentials for the live schema in `~/kul/java/conf/system.properties`.
    This is a parsing job; the layout is done.
+
+   **The benchmark already exists and nobody had to build it.** `~/kul` has **17 revisions of
+   `doc/DataModel/ERD.mwb` in git history** -- 16 consecutive before/after pairs, each one a real
+   migration with a layout a human accepted on both sides. Commit subjects name the change
+   ("added new asset set metadata table"). So for every pair you have: the previous diagram with
+   its coordinates, the new schema, and the placement a person actually chose. That is ground
+   truth for an incremental layouter, in quantity, for free.
+
+       git -C ~/kul log --oneline -- doc/DataModel/ERD.mwb
+       git -C ~/kul show REV:doc/DataModel/ERD.mwb > prev.mwb
+
+   The measurement that follows: freeze the old tables, place the ones the migration added, and
+   score the result against the human's placement -- and against the centroid heuristic, which
+   the example already shows losing badly. 16 pairs is enough to say whether the search beats the
+   heuristic in general rather than on one diagram, which is the only claim worth making.
+
+   `ERD.png` and `ERD_prev.png` are the current pair rendered, useful for judging by eye.
+   Credentials for the live schema are in `~/kul/java/conf/system.properties` if a reverse-
+   engineered comparison is wanted, but the git history alone is a richer source and needs no
+   database at all.
 3. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then
    interpolates between "nothing moves" and "full redraw". It also makes the search easier, by
