@@ -1,5 +1,5 @@
-/* cjitter.h -- four stochastic searches behind one interface, and the control that says
- * whether any of them earned its keep.
+/* cjitter.h -- four stochastic searches behind one interface, with uniform sampling as the
+ * control.
  *
  * Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
  *
@@ -12,9 +12,8 @@
  *     ga        a population, tournament selection, blend crossover, jittered mutation.
  *
  * cjitter_compare runs all four at the SAME budget over several seeds and reports which won and
- * whether the margin clears the spread across seeds. That is the whole point. A search that
- * cannot beat uniform sampling at equal cost has told you something, and most libraries will
- * happily spend a million evaluations without ever mentioning it.
+ * whether the margin clears the spread across seeds. A search that cannot beat uniform sampling
+ * at equal cost is a result worth having, and most libraries never measure it.
  *
  * Everything is deterministic given a seed. Nothing allocates outside cjitter_run.
  */

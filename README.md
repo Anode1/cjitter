@@ -1,6 +1,6 @@
-# cjitter: four stochastic searches in C, and the control that says whether any of them helped
+# cjitter: four stochastic searches in C, with uniform sampling as the control
 
-### It runs uniform random sampling at the same budget and tells you when your search did no better
+### It warns when a search does no better than uniform random sampling at the same budget
 
 You supply a fitness function over a box of real variables, lower being better, and a budget in
 evaluations. Four methods spend that budget:
@@ -74,7 +74,7 @@ The shipped layout is pinned digit for digit by `tests/cli.sh` on every run.
 answer, and the human's accepted layout, the frozen 34 identical in all three. The picture is
 the scores made visible.
 
-## Writing an objective that a search can follow
+## The objective
 
 The tiers in the ERD example are worth copying. Edges passing through a table are scored by the
 *length of the segment inside the rectangle*, not by a count: a count is flat under small moves, so

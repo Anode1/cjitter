@@ -82,7 +82,7 @@ Two results so far, both from the shipped examples:
   means the human optimizes things the objective cannot see -- semantic grouping, aligned rows,
   room to grow -- not that the tool out-draws a person. An objective is a specification.
 
-## Writing an objective a search can follow
+## The objective
 
 Score by penetration, not by a count. An edge passing through a table is scored by the length of
 the segment inside the rectangle; a crossing count is flat under small moves, so the search has
