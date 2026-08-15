@@ -14,7 +14,9 @@ evaluations. Four methods spend that budget:
     ./labels          # 90 rectangles in a container, minimise overlap
     ./erd             # place new tables on an existing diagram
 
-No dependencies beyond libm. Deterministic from a seed.
+No dependencies beyond libm. Deterministic from a seed. The methods' internal constants
+(patience, cooling, mutation) have fixed defaults; `cjitter_tuning` passes explicit ones
+through `cjitter_run_tuned` and `cjitter_compare_tuned`, with zero meaning the default.
 
 ## Why the control is the point
 

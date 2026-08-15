@@ -35,6 +35,17 @@
 #define MAXN 64
 #define MAXE 128
 
+/* The example's constants, in one place. W_TIER separates the objective's tiers by two orders
+ * of magnitude, so length only ever breaks ties; PUSH_PASSES bounds the repair's overlap
+ * resolution; the rest are the shipped budget, and every pinned number in tests/cli.sh and
+ * the README is a function of them. */
+#define W_TIER      100.0   /* penetration and crossings, against length at 1 */
+#define PUSH_PASSES 4       /* overlap push-out sweeps per repaired table */
+#define EVALS       8000
+#define SEEDS       5
+#define JITTER      0.25    /* first move size, as a fraction of the canvas */
+#define POP         30
+
 /* sqrt is the one libm call IEEE requires to be correctly rounded, so a length computed this
  * way is identical on every platform; hypot is not, and one ulp under an argmax is a
  * different layout. */
@@ -119,7 +130,7 @@ static double frozen_part(Erd *g)
         total += seglen(bx - ax, by - ay);
         for (i = 0; i < g->nfixed; i++) {
             if (i == g->e[a][0] || i == g->e[a][1]) continue;
-            total += 100.0 * through(g, NULL, i, ax, ay, bx, by);
+            total += W_TIER * through(g, NULL, i, ax, ay, bx, by);
         }
         for (b = a + 1; b < g->ne; b++) {
             double cx, cy, dx, dy;
@@ -128,7 +139,7 @@ static double frozen_part(Erd *g)
                 g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
             pos(g, NULL, g->e[b][0], &cx, &cy);
             pos(g, NULL, g->e[b][1], &dx, &dy);
-            if (cross(ax, ay, bx, by, cx, cy, dx, dy)) total += 100.0;
+            if (cross(ax, ay, bx, by, cx, cy, dx, dy)) total += W_TIER;
         }
     }
     return total;
@@ -147,11 +158,11 @@ static double score(const double *v, void *ctx)
             len += seglen(bx - ax, by - ay);
             for (i = 0; i < g->n; i++) {
                 if (i == g->e[a][0] || i == g->e[a][1]) continue;
-                total += 100.0 * through(g, v, i, ax, ay, bx, by);
+                total += W_TIER * through(g, v, i, ax, ay, bx, by);
             }
         } else {
             for (i = g->nfixed; i < g->n; i++)
-                total += 100.0 * through(g, v, i, ax, ay, bx, by);
+                total += W_TIER * through(g, v, i, ax, ay, bx, by);
         }
         for (b = a + 1; b < g->ne; b++) {
             double cx, cy, dx, dy;
@@ -160,7 +171,7 @@ static double score(const double *v, void *ctx)
                 g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
             pos(g, v, g->e[b][0], &cx, &cy);
             pos(g, v, g->e[b][1], &dx, &dy);
-            if (cross(ax, ay, bx, by, cx, cy, dx, dy)) total += 100.0;
+            if (cross(ax, ay, bx, by, cx, cy, dx, dy)) total += W_TIER;
         }
     }
     return total + len;
@@ -188,7 +199,7 @@ static void legal(double *v, void *ctx)
     for (k = g->nfixed; k < g->n; k++) {
         double *px = &v[2 * (k - g->nfixed)], *py = &v[2 * (k - g->nfixed) + 1];
         oncanvas(g, k, px, py);
-        for (pass = 0; pass < 4; pass++)
+        for (pass = 0; pass < PUSH_PASSES; pass++)
             for (i = 0; i < g->n; i++) {
                 double qx, qy, ox, oy;
                 if (i == k) continue;
@@ -318,7 +329,7 @@ int main(int argc, char **argv)
         lo[i+1] = 0; hi[i+1] = g.ch;
     }
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = score; p.repair = legal; p.ctx = &g;
-    b.evals = 8000; b.seed = 1; b.jitter = 0.25; b.pop = 30;
+    b.evals = EVALS; b.seed = 1; b.jitter = JITTER; b.pop = POP;
 
     /* The human's own answer: where the migration's tables sit in the accepted diagram. */
     for (k = 0; k < nnew; k++) {
@@ -356,7 +367,7 @@ int main(int argc, char **argv)
     printf("%-10s %12.6g   (where the human actually put them)\n\n",
            "human", score(xh, &g));
 
-    if (cjitter_compare(&p, &b, 5, stdout) != 0) {
+    if (cjitter_compare(&p, &b, SEEDS, stdout) != 0) {
         fprintf(stderr, "erd: comparison failed\n");
         return 1;
     }

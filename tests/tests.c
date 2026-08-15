@@ -169,6 +169,31 @@ int main(void)
         CHECK(returned, "repair: every returned best satisfies it too");
     }
 
+    /* The tuning: NULL, a zeroed struct and the explicit defaults are the same run bit for
+     * bit, and a negative field is refused before the fitness is ever called. */
+    {
+        Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_budget b = { 300, 9, 0.1, 0 };
+        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0 };
+        cjitter_tuning dflt = { 0, 0.5, 1.0 / 64.0, 20, -6.907755278982137, 0.9, 0.3 };
+        cjitter_tuning bad = { -1, 0, 0, 0, 0, 0, 0 };
+        double x[2], y[2], z2[2];
+        cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
+        cjitter_result r3 = { 0, z2, 0, 0, NULL };
+        CHECK(cjitter_run("climb", &p, &b, &r) == 0 &&
+              cjitter_run_tuned("climb", &p, &b, &zero, &r2) == 0 &&
+              cjitter_run_tuned("climb", &p, &b, &dflt, &r3) == 0 &&
+              r.best == r2.best && r.best == r3.best &&
+              memcmp(x, y, sizeof x) == 0 && memcmp(x, z2, sizeof x) == 0,
+              "tuning: NULL, zeroed and explicit defaults are the same run bit for bit");
+        w.calls = 0;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &bad, &r) == -1 && w.calls == 0,
+              "tuning: a negative field is refused, before any evaluation");
+        CHECK(cjitter_compare_tuned(&p, &b, &bad, 2, NULL) == -1,
+              "tuning: compare refuses it too");
+    }
+
     /* Seed 0 is remapped inside run as it is in rng, so it works and reproduces. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };

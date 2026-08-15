@@ -47,6 +47,22 @@ typedef struct {
     long     pop;        /* ga only; 0 takes a default */
 } cjitter_budget;
 
+/* The methods' internal constants. Every field taken as zero means the default printed beside
+ * it, so a zeroed struct is exactly the shipped behaviour. A tuning is part of a result's
+ * identity: two runs compare only if they share one. anneal_cool_ln is the natural log of the
+ * temperature's total decay; pass a literal rather than log(x) if runs must reproduce across
+ * platforms, because log is not correctly rounded and one ulp moves the trajectory. */
+typedef struct {
+    long   climb_patience;    /* rejections before the move size halves; 0: 40 + 10n     */
+    double climb_shrink;      /* the halving; 0: 0.5                                     */
+    double climb_restart_at;  /* scale/jitter ratio that restarts; 0: 1/64               */
+    long   anneal_probes;     /* uphill probes setting the start temperature; 0: 20      */
+    double anneal_cool_ln;    /* ln of the total temperature decay; 0: -6.907755278982137,
+                                 which is ln 1e-3                                        */
+    double anneal_move_decay; /* move-size fraction the cooling removes; 0: 0.9          */
+    double ga_mutate;         /* mutation move size as a fraction of jitter; 0: 0.3      */
+} cjitter_tuning;
+
 typedef struct {
     double      best;    /* the fitness found */
     double     *x;       /* the point, n values, owned by the caller */
@@ -56,14 +72,20 @@ typedef struct {
 } cjitter_result;
 
 /* METHOD is "random", "climb", "anneal" or "ga". OUT->x must have room for n doubles.
- * Returns 0, or -1 on a bad argument or an allocation failure. */
+ * Returns 0, or -1 on a bad argument or an allocation failure. cjitter_run takes the default
+ * tuning; the _tuned variant takes an explicit one, where NULL means the same defaults and a
+ * negative field is refused. */
 int cjitter_run(const char *method, const cjitter_problem *p, const cjitter_budget *b,
                 cjitter_result *out);
+int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitter_budget *b,
+                      const cjitter_tuning *t, cjitter_result *out);
 
 /* All four, SEEDS times each, at one budget. Prints a table to STREAM: the median best per
  * method, the spread over seeds, and which of them beat the control by more than that spread.
- * Returns 0, or -1 on a bad argument or an allocation failure. */
+ * Returns 0, or -1 on a bad argument or an allocation failure. The _tuned variant as above. */
 int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, void *stream);
+int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
+                          const cjitter_tuning *t, long seeds, void *stream);
 
 /* The four names, NULL-terminated, in the order compare reports them. */
 extern const char *const cjitter_methods[];

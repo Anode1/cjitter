@@ -18,6 +18,18 @@
 
 #include "../c/cjitter.h"
 
+/* The example's constants: the geometry, the shipped budget, and the defaults the three
+ * arguments fall back to. The README's labels table is a function of these. */
+#define LABEL_W     8.0
+#define LABEL_H     3.0
+#define AREA_W      100.0
+#define AREA_H      60.0
+#define JITTER      0.15    /* first move size, as a fraction of the container */
+#define POP         40
+#define DEF_LABELS  90
+#define DEF_EVALS   20000
+#define DEF_SEEDS   7
+
 typedef struct { long n; double w, h, cw, ch; } Labels;
 
 static double overlap(const double *x, void *ctx)
@@ -54,9 +66,9 @@ int main(int argc, char **argv)
     cjitter_problem p;
     cjitter_budget b;
     double *lo, *hi;
-    long n = argc > 1 ? atol(argv[1]) : 90;
-    long evals = argc > 2 ? atol(argv[2]) : 20000;
-    long seeds = argc > 3 ? atol(argv[3]) : 7;
+    long n = argc > 1 ? atol(argv[1]) : DEF_LABELS;
+    long evals = argc > 2 ? atol(argv[2]) : DEF_EVALS;
+    long seeds = argc > 3 ? atol(argv[3]) : DEF_SEEDS;
     long i;
 
     /* atol reads junk as 0, so each bound below is also the refusal of a non-numeric
@@ -64,7 +76,7 @@ int main(int argc, char **argv)
     if (n < 2) { fprintf(stderr, "labels: need at least two labels\n"); return 2; }
     if (evals < 1) { fprintf(stderr, "labels: need at least one evaluation\n"); return 2; }
     if (seeds < 1) { fprintf(stderr, "labels: need at least one seed\n"); return 2; }
-    L.n = n; L.w = 8; L.h = 3; L.cw = 100; L.ch = 60;
+    L.n = n; L.w = LABEL_W; L.h = LABEL_H; L.cw = AREA_W; L.ch = AREA_H;
     lo = malloc((size_t)(2*n) * sizeof *lo);
     hi = malloc((size_t)(2*n) * sizeof *hi);
     if (!lo || !hi) { free(lo); free(hi); return 1; }
@@ -74,7 +86,7 @@ int main(int argc, char **argv)
     }
     p.n = 2 * n; p.lo = lo; p.hi = hi;
     p.fitness = overlap; p.repair = inside; p.ctx = &L;
-    b.evals = evals; b.seed = 1; b.jitter = 0.15; b.pop = 40;
+    b.evals = evals; b.seed = 1; b.jitter = JITTER; b.pop = POP;
 
     printf("%ld labels of %gx%g in a %gx%g container: %g%% of the area is label.\n",
            n, L.w, L.h, L.cw, L.ch, 100.0 * (double)n * L.w * L.h / (L.cw * L.ch));

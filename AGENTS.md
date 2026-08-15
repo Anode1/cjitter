@@ -20,7 +20,9 @@ solved the 2001 problem was called a genetic algorithm and was in fact annealing
 ## The contract (read first)
 
 - **`c/cjitter.h`** -- the interface, and the specification. A problem is `n`, a box, a fitness
-  function and an optional repair callback. A budget is evaluations, a seed and a first move size.
+  function and an optional repair callback. A budget is evaluations, a seed and a first move
+  size. A tuning is optional and names the methods' internal constants; a zeroed field is the
+  shipped default, so results only compare across runs that share one.
 - **`README.md`** -- what the library promises and the measured output of both examples.
 - Hard constraints belong in `repair`, never in the fitness. A constraint enforced by construction
   cannot trade itself off against the objective, and no infeasible point can be returned as best.
@@ -29,7 +31,7 @@ solved the 2001 problem was called a genetic algorithm and was in fact annealing
 
     make            # both examples
     make check      # ut + cliut -- the commit gate
-    make ut         # unit suite, 47 checks: the library's contract, called as functions
+    make ut         # unit suite, 50 checks: the library's contract, called as functions
     make cliut      # black-box, 37 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan

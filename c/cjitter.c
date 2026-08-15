@@ -13,6 +13,21 @@
 
 const char *const cjitter_methods[] = { "random", "climb", "anneal", "ga", NULL };
 
+/* Every constant a method runs on, in one place. The interface exposes evaluations, seed,
+ * first move size and population because those are the knobs a caller can reason about; the
+ * rest are the methods' own shape, fixed here so a result names one implementation. Changing
+ * any of these changes every pinned result in tests/cli.sh. */
+#define CLIMB_PATIENCE(n)  (40 + 10 * (n))   /* rejections before the move size halves */
+#define CLIMB_SHRINK       0.5               /* the halving */
+#define CLIMB_RESTART_AT   (1.0 / 64.0)      /* scale/jitter ratio that triggers a restart */
+#define ANNEAL_PROBES      20                /* uphill probes that set the start temperature */
+#define ANNEAL_PROBE_MIN   10                /* smallest budget-to-probe ratio worth probing */
+#define ANNEAL_COOL_LN     -6.907755278982137 /* ln(1e-3): the temperature's total decay */
+#define ANNEAL_MOVE_DECAY  0.9               /* how much of the move size cooling removes */
+#define GA_POP_DEFAULT     30
+#define GA_MUTATE          0.3               /* mutation move size, as a fraction of jitter */
+#define COMPARE_SEED_STEP  7919u             /* prime stride between compare's run seeds */
+
 /* Scratch for one run. Allocated once here, so no search step allocates. */
 typedef struct {
     const cjitter_problem *p;
@@ -22,7 +37,27 @@ typedef struct {
     Rng      rng;
     long     spent, budget;
     double   bestf;
+    cjitter_tuning tun;          /* resolved: no zero fields except climb_patience (needs n) */
 } Run;
+
+/* A zero field means the default beside it in the header; a negative one is a caller error.
+ * climb_patience stays zero here when defaulted, because its default needs n. */
+static int resolve_tuning(const cjitter_tuning *t, cjitter_tuning *out)
+{
+    cjitter_tuning z = { 0, 0, 0, 0, 0, 0, 0 };
+    if (!t) t = &z;
+    if (t->climb_patience < 0 || t->climb_shrink < 0 || t->climb_restart_at < 0 ||
+        t->anneal_probes < 0 || t->anneal_cool_ln > 0 || t->anneal_move_decay < 0 ||
+        t->ga_mutate < 0) return -1;
+    *out = *t;
+    if (out->climb_shrink == 0)      out->climb_shrink = CLIMB_SHRINK;
+    if (out->climb_restart_at == 0)  out->climb_restart_at = CLIMB_RESTART_AT;
+    if (out->anneal_probes == 0)     out->anneal_probes = ANNEAL_PROBES;
+    if (out->anneal_cool_ln == 0)    out->anneal_cool_ln = ANNEAL_COOL_LN;
+    if (out->anneal_move_decay == 0) out->anneal_move_decay = ANNEAL_MOVE_DECAY;
+    if (out->ga_mutate == 0)         out->ga_mutate = GA_MUTATE;
+    return 0;
+}
 
 static double uni(Rng *r) { return (double)rng_u32(r) / 4294967296.0; }
 
@@ -110,7 +145,7 @@ static void run_random(Run *R)
  * move size has already shrunk as far as it usefully goes. */
 static void run_climb(Run *R, double jit, long *restarts)
 {
-    long stuck = 0, patience = 40 + 10 * R->p->n;
+    long stuck = 0, patience = R->tun.climb_patience > 0 ? R->tun.climb_patience : CLIMB_PATIENCE(R->p->n);
     double f, scale = jit;
     draw(R, R->x);
     f = score(R, R->x);
@@ -125,12 +160,12 @@ static void run_climb(Run *R, double jit, long *restarts)
             keep(R, R->x, f);
             stuck = 0;
         } else if (++stuck >= patience) {
-            scale *= 0.5;
+            scale *= R->tun.climb_shrink;
             stuck = 0;
             /* As local as it is going to get: restart -- but only if there is budget left to
              * score the new start. Without the check this was the one path that could score
              * twice in an iteration and spend budget+1, which the header says cannot happen. */
-            if (scale < jit / 64.0 && R->spent < R->budget) {
+            if (scale < jit * R->tun.climb_restart_at && R->spent < R->budget) {
                 draw(R, R->x);
                 f = score(R, R->x);
                 keep(R, R->x, f);
@@ -154,7 +189,7 @@ static void run_anneal(Run *R, double jit)
     /* Scale the starting temperature to the problem: the mean uphill step of a few probes. */
     {
         double s = 0;
-        long i, m = 20 < R->budget / 10 ? 20 : 1;
+        long i, m = R->tun.anneal_probes < R->budget / ANNEAL_PROBE_MIN ? R->tun.anneal_probes : 1;
         for (i = 0; i < m && R->spent < R->budget; i++) {
             jitter(R, R->x, R->cand, jit);
             s += fabs(score(R, R->cand) - f);
@@ -164,8 +199,8 @@ static void run_anneal(Run *R, double jit)
     while (R->spent < R->budget) {
         double g, frac = (double)R->spent / (double)R->budget;
         /* 1e-3^frac, written as exp so the whole schedule stays libm-free */
-        t = t0 * exp_neg(frac * -6.907755278982137);
-        jitter(R, R->x, R->cand, jit * (1.0 - 0.9 * frac));
+        t = t0 * exp_neg(frac * R->tun.anneal_cool_ln);
+        jitter(R, R->x, R->cand, jit * (1.0 - R->tun.anneal_move_decay * frac));
         g = score(R, R->cand);
         if (g < f || (t > 0 && uni(&R->rng) < exp_neg((f - g) / t))) {
             f = g;
@@ -205,7 +240,7 @@ static void run_ga(Run *R, double jit)
                 double w = uni(&R->rng);
                 kid[j] = w * pa[j] + (1.0 - w) * pb[j];
             }
-            jitter(R, kid, kid, jit * 0.3);
+            jitter(R, kid, kid, jit * R->tun.ga_mutate);
         }
         memcpy(R->pop, next, (size_t)np * (size_t)n * sizeof *next);
         for (i = 0; i < np && R->spent < R->budget; i++) {
@@ -215,8 +250,8 @@ static void run_ga(Run *R, double jit)
     }
 }
 
-int cjitter_run(const char *method, const cjitter_problem *p, const cjitter_budget *b,
-                cjitter_result *out)
+int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitter_budget *b,
+                      const cjitter_tuning *t, cjitter_result *out)
 {
     Run R;
     long restarts = 0;
@@ -225,10 +260,11 @@ int cjitter_run(const char *method, const cjitter_problem *p, const cjitter_budg
 
     if (!method || !p || !b || !out || !p->fitness || p->n < 1 || b->evals < 1) return -1;
     memset(&R, 0, sizeof R);
+    if (resolve_tuning(t, &R.tun) != 0) return -1;
     R.p = p;
     R.budget = b->evals;
     R.bestf = HUGE_VAL;
-    R.npop = b->pop > 1 ? b->pop : 30;
+    R.npop = b->pop > 1 ? b->pop : GA_POP_DEFAULT;
     if (R.npop > b->evals) R.npop = b->evals;
     jit = b->jitter > 0 ? b->jitter : 0.1;
     rng_seed(&R.rng, b->seed ? b->seed : 1u);
@@ -257,13 +293,20 @@ done:
     return rc;
 }
 
+int cjitter_run(const char *method, const cjitter_problem *p, const cjitter_budget *b,
+                cjitter_result *out)
+{
+    return cjitter_run_tuned(method, p, b, NULL, out);
+}
+
 static int cmpd(const void *a, const void *b)
 {
     double x = *(const double *)a, y = *(const double *)b;
     return x < y ? -1 : (x > y ? 1 : 0);
 }
 
-int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, void *stream)
+int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
+                          const cjitter_tuning *t, long seeds, void *stream)
 {
     FILE *f = stream ? (FILE *)stream : stdout;
     double *v = NULL, med[8], spread[8], best[8];
@@ -281,8 +324,8 @@ int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seed
             cjitter_budget bb = *b;
             cjitter_result r;
             memset(&r, 0, sizeof r);
-            bb.seed = (uint32_t)(1u + 7919u * (unsigned)s);
-            if (cjitter_run(cjitter_methods[m], p, &bb, &r) != 0) goto done;
+            bb.seed = (uint32_t)(1u + COMPARE_SEED_STEP * (unsigned)s);
+            if (cjitter_run_tuned(cjitter_methods[m], p, &bb, t, &r) != 0) goto done;
             v[s] = r.best;
         }
         qsort(v, (size_t)seeds, sizeof *v, cmpd);
@@ -309,4 +352,9 @@ int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seed
 done:
     free(v);
     return rc;
+}
+
+int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, void *stream)
+{
+    return cjitter_compare_tuned(p, b, NULL, seeds, stream);
 }
