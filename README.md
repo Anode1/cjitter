@@ -55,7 +55,15 @@ observation that makes the problem tractable: only those ten need placing. Freez
 not a compromise for tractability -- a reader who knows where a table sits should still find it
 there -- and it turns 88 free variables into 20.
 
-![The current revision: 44 tables, the ten the last migration added in amber](example/erd/data/ERD.png)
+Both revisions are in the repository, drawn by `data/render.py` from the extracted geometry.
+Neither image is a Workbench export; an export would carry the real names. The diagram before
+the migration:
+
+![Before the migration: 36 tables in the human's layout](example/erd/data/ERD_prev.png)
+
+and after it, the ten added tables in amber:
+
+![After the migration: 44 tables, the ten added in amber](example/erd/data/ERD.png)
 
     34 tables already placed, 10 added by a migration, 59 foreign keys.
 
