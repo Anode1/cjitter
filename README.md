@@ -36,9 +36,11 @@ exists to say, and it said it on the first run.
 
 ## The examples
 
-**`example/labels.c`** places rectangles in a container with minimum overlap. Cheap, exact,
-deterministic objective; hard constraint (stay inside) enforced by clamping in the repair
-callback rather than by a penalty term, so it can never be traded against the objective.
+**`example/labels.c`** places rectangles in a container with minimum overlap. This is the
+problem the author solved for industry in 2001, deployed: label placement in a bounded area,
+no edges between them, nothing allowed to intersect. Cheap, exact, deterministic objective;
+hard constraint (stay inside) enforced by clamping in the repair callback rather than by a
+penalty term, so it can never be traded against the objective.
 
 **`example/erd/`** is the application this was written for. Laying out a diagram with the
 fewest edge crossings is NP-complete (Garey and Johnson, *Crossing Number is NP-Complete*,
