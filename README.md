@@ -14,35 +14,43 @@ evaluations. Four methods spend that budget:
     ./labels          # 90 rectangles in a container, minimise overlap
     ./erd             # place new tables on an existing diagram
 
-No dependencies beyond libm. Deterministic from a seed. The methods' internal constants
-(patience, cooling, mutation) have fixed defaults; `cjitter_tuning` passes explicit ones
-through `cjitter_run_tuned` and `cjitter_compare_tuned`, with zero meaning the default.
+No dependencies beyond libm. Deterministic from a seed on every platform. The methods'
+internal constants (patience, cooling, mutation) come from `cjitter_tuning_default`; change
+the fields you mean to change and pass the struct to `cjitter_run_tuned` or
+`cjitter_compare_tuned`. Every field is read literally, so `ga_mutate = 0` is a real
+mutation ablation.
 
-## Why the control is the point
+## The control
 
 Most optimisation libraries will spend a million evaluations and never mention that uniform
-sampling would have done as well. `cjitter_compare` runs all four methods at the same budget over
-several seeds and reports which beat the control, where "beat" means the method's median is better
-than the control's luckiest seed. Anything short of that is inside the luck.
+sampling would have done as well. `cjitter_compare` runs all four methods at the same budget
+on the same seeds and reports, per method, the median, the range, the per-seed wins against
+the control, and the exact one-sided sign-test probability of that many wins under a fair
+coin. "better" is declared only when that probability is at or under 5%; "not shown" is a
+failure to demonstrate improvement, and says nothing about equality.
 
 On the label problem, at 36% area coverage:
 
-    method         median       spread  vs random
-    random        187.046      22.2028 the control
-    climb         15.3685      44.6581     better
-    anneal        121.731      77.3957     better
-    ga            195.553      6.59542  no better
+    method         median        range    wins    sign-p   vs random
+    random        189.166      35.3242       -         - the control
+    climb         12.8278       39.717    7/7    0.00781      better
+    anneal        127.625      35.4232    7/7    0.00781      better
+    ga            1.38243      3.55264    7/7    0.00781      better
 
-The GA is no better than uniform sampling at equal cost. That is the sort of thing this library
-exists to say, and it said it on the first run.
+The control has already earned its keep once. The first GA shipped here mutated at a fixed
+scale, so every generation re-scattered whatever the population had converged to, and the
+table read "ga 195.6 against random's 187.0": no better than uniform sampling at equal cost.
+An outside review traced that verdict to the fixed scale; the mutation now decays over the
+run, and the same GA is the best method on the problem. Both halves of that story are the
+library working as intended.
 
 ## The examples
 
 **`example/labels.c`** places rectangles in a container with minimum overlap. This is the
 problem the author solved for industry in 2001, deployed: label placement in a bounded area,
 no edges between them, nothing allowed to intersect. Cheap, exact, deterministic objective;
-hard constraint (stay inside) enforced by clamping in the repair callback rather than by a
-penalty term, so it can never be traded against the objective.
+staying inside the container is a hard constraint in the repair callback, and `cjitter.h`
+says why that is not a penalty term.
 
 **`example/erd/`** is the application this was written for. Laying out a diagram with the
 fewest edge crossings is NP-complete (Garey and Johnson, *Crossing Number is NP-Complete*,
@@ -52,9 +60,9 @@ do it badly, every reverse-engineering of the schema scrambles the positions, an
 this 44-table diagram by hand after each one cost the author about an hour. That recurring
 hour is the problem this example solves.
 
-The graph is real: an anonymized production schema of 44 tables and 59 foreign-key edges, in
-the layout a person maintained by hand across migrations (`example/erd/data/`, provenance and
-anonymization in `data/PROVENANCE.md`). The last migration added ten tables. The observation
+The graph is real: an anonymized production schema, 44 tables and the 59 foreign-key edges on
+its diagram (`example/erd/data/`, provenance and anonymization in `data/PROVENANCE.md`). The
+last migration added ten tables. The observation
 that makes the problem tractable: only those ten need placing. Freezing the rest is no
 compromise, since a reader who knows where a table sits should still find it there, and it
 turns 88 free variables into 20.
@@ -74,22 +82,24 @@ and after it, the ten added tables in amber:
     centroid         251673   (place each new table at its neighbours' centroid)
     human            231877   (where the human actually put them)
 
-    method         median       spread  vs random
-    random         233513      78056.9 the control
-    climb          109221      67136.9     better
-    anneal         172069       106754     better
-    ga             127781        16608     better
+    method         median        range    wins    sign-p   vs random
+    random         258611        23778       -         - the control
+    climb          126176      52628.2    5/5     0.0312      better
+    anneal         134884      55274.9    5/5     0.0312      better
+    ga            85123.4        16702    5/5     0.0312      better
 
-All three searches beat the control. The heuristic loses: a table at its neighbours' centroid
-lands on the edges running between them. The searches also beat the layout the human accepted,
-roughly halving its score, and that result says less than it seems. The human was optimizing
+All three searches beat the control on every seed. The heuristic loses: a table at its
+neighbours' centroid lands on the edges running between them. The searches also beat the
+layout the human accepted, and that result says less than it seems. The human was optimizing
 what this objective cannot see: semantic grouping, matching row heights, room to grow. The
 objective specifies crossings, penetrations and length, and the search is better only at
-those. The shipped layout is pinned digit for digit by `tests/cli.sh` on every run.
+those. One more honesty note: the objective charges the human for straight center-to-center
+edges, while the diagram the human actually maintained drew routed connectors, so some of the
+penetration charged to the human's score never existed on their screen.
 
-`./erd --svg > erd.svg` draws the three states stacked: the centroid heuristic, the search's
-answer, and the human's accepted layout, the frozen 34 identical in all three. The picture is
-the scores made visible.
+The report ends with the layout one run at seed 1 found, pinned digit for digit by
+`tests/cli.sh`; `./erd --svg > erd.svg` draws it between the two references, three states
+stacked, the frozen 34 identical in all three.
 
 ## The objective
 
@@ -99,9 +109,8 @@ the search has nothing to follow and walks at random on the plateau. Crossings s
 weight two orders of magnitude above edge length, so ties break toward a tidy diagram without any
 weight having been guessed.
 
-Node overlap and canvas bounds are hard constraints in the repair callback. A hard constraint
-enforced by construction cannot trade itself off against the objective, and no infeasible point can
-be returned as the best.
+Node overlap and canvas bounds are hard constraints in the repair callback, for the reason
+`cjitter.h` gives at the `cjitter_repair` typedef.
 
 ## Build and test
 
@@ -114,17 +123,12 @@ be returned as the best.
     make pedantic   -pedantic -Wextra over every source; must be clean
     make clean
 
-CI is three separate jobs, not a cross-product: the full battery on Linux and macOS with each
-platform's default compiler; `make check` across gcc-12/gcc-13/clang at `-O0` and `-O2` on
-Linux; and a reproducibility job that builds four ways, two compilers at `-O0` and
-`-O2 -march=native`, and compares both examples' output byte for byte.
+CI runs everything on Linux and macOS, six compiler/flag pairs, and a job that builds four
+ways and compares both examples' output byte for byte; `AGENTS.md` states the exact coverage
+and its limits.
 
-`-ffp-contract=off` is in the flags: a run must reproduce from its seed on another compiler and
-another architecture, and gcc contracts `a*b+c` into one FMA by default even under `-std=c99`.
-For the same reason no search trajectory calls libm beyond `sqrt`, the one function IEEE
-requires to be correctly rounded: the gaussian step is a sum of uniforms, anneal's schedule and
-acceptance use the library's own arithmetic `exp`, and the examples measure length with `sqrt`
-rather than `hypot`. One ulp of libm disagreement under an argmax is a different answer.
+`-ffp-contract=off` is in the flags, and no search trajectory calls libm beyond `fabs` and
+`sqrt`; `cjitter.h` states that discipline and the reason for it.
 
 ## Status
 

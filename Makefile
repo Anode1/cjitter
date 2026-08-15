@@ -61,10 +61,12 @@ ut-ubsan: $(HEADERS)
 	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o erd_ubsan example/erd/erd.c $(SRC) $(LIBM)
 	LABELS_BIN=$(CURDIR)/labels_ubsan ERD_BIN=$(CURDIR)/erd_ubsan sh tests/cli.sh
 
+# -Werror is what makes "must be clean" a gate: gcc exits 0 on warnings, so without it this
+# target only enforced its claim on whoever read the scrollback.
 pedantic: $(HEADERS)
 	@rc=0; tmp=`mktemp -d`; \
 	for f in $(SRC) tests/tests.c example/labels.c example/erd/erd.c; do \
-	    $(CC) $(PROJ) -pedantic -Wextra -O2 -c "$$f" -o "$$tmp/p.o" || rc=1; \
+	    $(CC) $(PROJ) -pedantic -Wextra -Werror -O2 -c "$$f" -o "$$tmp/p.o" || rc=1; \
 	done; \
 	rm -rf "$$tmp"; \
 	test $$rc -eq 0 && echo "pedantic: clean"; exit $$rc

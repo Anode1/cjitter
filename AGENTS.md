@@ -2,9 +2,9 @@
 
 `cjitter` is four stochastic searches over a box of real variables, in **C99**, behind one fitness
 interface, with uniform random sampling as a control that runs at the same budget. It is the third
-of three: [linearr](https://github.com/Anode1/linearr) fits a line and says when a line is the
-wrong shape; [bpnn](https://github.com/Anode1/bpnn) fits a network and says when not to trust it;
-this searches and says when the search did no better than luck.
+of three: [linearr](https://github.com/Anode1/linearr) fits the line, [bpnn](https://github.com/Anode1/bpnn)
+fits the curve, and each says when not to believe itself. This one searches, with the control run
+beside it so it can say when the search was luck.
 
 ## Why it exists
 
@@ -21,18 +21,20 @@ solved the 2001 problem was called a genetic algorithm and was in fact annealing
 
 - **`c/cjitter.h`** -- the interface, and the specification. A problem is `n`, a box, a fitness
   function and an optional repair callback. A budget is evaluations, a seed and a first move
-  size. A tuning is optional and names the methods' internal constants; a zeroed field is the
-  shipped default, so results only compare across runs that share one.
-- **`README.md`** -- what the library promises and the measured output of both examples.
-- Hard constraints belong in `repair`, never in the fitness. A constraint enforced by construction
-  cannot trade itself off against the objective, and no infeasible point can be returned as best.
+  size. A tuning starts from `cjitter_tuning_default` and every field is read literally, so
+  results only compare across runs that share one.
+- **`README.md`** -- what the library promises and the measured output of both examples. Every
+  number in it comes from running the shipped binaries; the code is the ground truth and the
+  documents follow it.
+- Hard constraints belong in `repair`, never in the fitness; `cjitter.h` says why at the
+  `cjitter_repair` typedef.
 
 ## Build and test
 
     make            # both examples
     make check      # ut + cliut -- the commit gate
-    make ut         # unit suite, 50 checks: the library's contract, called as functions
-    make cliut      # black-box, 37 checks: the built examples through a shell
+    make ut         # unit suite, 60 checks: the library's contract, called as functions
+    make cliut      # black-box, 38 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
@@ -56,10 +58,10 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
 
     c/cjitter.h     the interface
     c/cjitter.c     the four searches and cjitter_compare
-    c/rng           deterministic xorshift, carried from bpnn. NOTE: 32-bit, period 2^32-1.
-                    Fine for a run; NOT fine for a study drawing more than ~4e9 numbers. A
-                    measurement that exhausted this period understated its own standard error
-                    by 2.5x.
+    c/rng           deterministic xorshift64*, period 2^64-1. The 32-bit generator it replaced
+                    had compare's seed streams overlapping after 1.6e8 draws, a budget one
+                    command-line argument could reach; its bpnn ancestor once understated a
+                    study's standard error by 2.5x the same way.
     example/labels.c    rectangles in a container, minimum overlap
     example/erd/erd.c   tables added by a migration onto a frozen diagram; --svg draws it
     example/erd/data/   the real schema, anonymized: ERD.mwb, both revisions as PNG, the
@@ -67,22 +69,24 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
     tests/tests.c       unit suite: refusals, the exact budget, determinism, box and repair
     tests/cli.sh        black-box: exit codes, refusal messages, runs byte-identical over reruns
 
-## What is measured, and what it means
+## The verdict
 
-`cjitter_compare` calls a method better only when its median over seeds beats the **control's
-luckiest seed**. An earlier rule compared the margin against the control's range and called a
-method that hit the global optimum on every seed "inside noise"; random search is erratic, so its
-range is wide, and that rule punished a method for the control's variance.
+`cjitter_compare` runs every method on the same seed panel and judges each against the control
+by an exact one-sided sign test on the paired per-seed differences: "better" needs the wins to
+be explainable by a fair coin with probability at most 5%, and "not shown" is a failure to
+demonstrate, never a demonstrated equality. This is the third rule this project has had, and
+the two burials are worth remembering. The first compared the margin against the control's
+range and called a method that hit the optimum on every seed "inside noise", punishing it for
+the control's variance. The second required the method's median to beat the control's luckiest
+seed, which reads as strict but passes a truly-equal method one time in twelve at five seeds,
+gets harder as seeds are added because a minimum only falls, and threw away the pairing the
+shared panel had already bought.
 
-Two results so far, both from the shipped examples:
-
-- Labels at 36% coverage: climb 15.4, anneal 121.7, **ga 195.6 against random's 187.0 -- no
-  better than uniform sampling at equal cost.**
-- ERD, on the real anonymized schema (34 frozen tables, 10 added by the last migration): all
-  three beat the control, the centroid heuristic scores 251673, and the searches also beat the
-  human's accepted layout (231877, against climb's 109221 median). That result means the human
-  optimizes what the objective cannot see, semantic grouping, aligned rows, room to grow. The
-  tool is better only at what the objective names.
+The measured results live in README.md's two tables and are not restated here. The shape of
+them: all three searches now beat the control on every seed of both examples, and the ERD
+searches also beat the human's accepted layout, which says the objective misses what the
+human optimizes, semantic grouping, aligned rows, room to grow, and never that the tool
+out-draws a person.
 
 ## The objective
 
@@ -100,11 +104,12 @@ and crossings at 100, edge length at 1, so length only ever breaks ties.
    and CI covers two platforms, six compiler/flag pairs and the byte-for-byte reproducibility
    job. Writing the exactness checks found the one path that could overspend the budget:
    climb's restart could score twice in an iteration and spend budget+1. Fixed, with a probed
-   witness pinned as a regression check (currently climb seed 200 at 5000 evaluations,
-   restarts pinned at 6; re-derive by probing an unguarded build if the trajectory ever moves).
-   A later review round removed every libm call from the trajectories except sqrt (Box-Muller
-   became a sum of uniforms, anneal's exp and pow became arithmetic), because libms disagree in
-   the last ulp and one ulp under an argmax is a different answer.
+   witness pinned as a regression check; tests/tests.c owns the witness and the instructions
+   for re-deriving it when a trajectory change moves it. Later review rounds removed every
+   libm call from the trajectories except fabs and sqrt (cjitter.h states the discipline),
+   and a four-critic pass fixed an uninitialized best on degenerate fitnesses, the missing
+   box refusals, a fixed GA mutation scale that had manufactured the first "no better"
+   verdict, and the tuning API's zero-means-default trap.
 2. ~~**The real pair on the example.**~~ Done. `example/erd` now runs the real schema's latest
    migration: 34 frozen tables at the human's coordinates, 10 added tables placed by the search,
    the human's own placement scored as a reference. The data is committed anonymized under

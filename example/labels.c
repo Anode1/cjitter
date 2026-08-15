@@ -4,11 +4,10 @@
  *
  * Each label is a fixed-size rectangle with a free centre. The objective is the total overlap
  * area between labels, which is exact, cheap and deterministic: no gradient, no noise, and one
- * evaluation is microseconds. That combination is what these searches are for.
+ * evaluation is microseconds.
  *
  * Staying inside the container is a HARD constraint, enforced in the repair callback by clamping
- * the centre. It is not a penalty term, so it cannot trade itself off against overlap and no
- * infeasible layout can be returned as the best.
+ * the centre; cjitter.h says why that is not a penalty term.
  *
  *     example/labels [labels] [evaluations] [seeds]
  */
@@ -72,8 +71,10 @@ int main(int argc, char **argv)
     long i;
 
     /* atol reads junk as 0, so each bound below is also the refusal of a non-numeric
-     * argument: without it, "junk" evaluations meant a header, no table and exit 0. */
+     * argument: without it, "junk" evaluations meant a header, no table and exit 0. The
+     * upper bound keeps 2*n inside a long before it reaches the mallocs. */
     if (n < 2) { fprintf(stderr, "labels: need at least two labels\n"); return 2; }
+    if (n > 10000000) { fprintf(stderr, "labels: too many labels\n"); return 2; }
     if (evals < 1) { fprintf(stderr, "labels: need at least one evaluation\n"); return 2; }
     if (seeds < 1) { fprintf(stderr, "labels: need at least one seed\n"); return 2; }
     L.n = n; L.w = LABEL_W; L.h = LABEL_H; L.cw = AREA_W; L.ch = AREA_H;

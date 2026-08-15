@@ -61,6 +61,13 @@ static void floor_first(double *x, void *ctx)
     if (x[0] < 0.5) x[0] = 0.5;
 }
 
+/* A fitness with no finite value anywhere, for the degenerate-return check. */
+static double always_worst(const double *x, void *ctx)
+{
+    (void)x; (void)ctx;
+    return HUGE_VAL;
+}
+
 int main(void)
 {
     static const double lo2[2] = { -5, -5 }, hi2[2] = { 5, 5 };
@@ -105,14 +112,36 @@ int main(void)
         CHECK(cjitter_run("climb", &bad, &b, &r) == -1, "run refuses a NULL fitness");
         bad = p; bad.n = 0;
         CHECK(cjitter_run("climb", &bad, &b, &r) == -1, "run refuses n < 1");
+        bad = p; bad.lo = NULL;
+        CHECK(cjitter_run("climb", &bad, &b, &r) == -1, "run refuses a NULL lower bound");
+        bad = p; bad.hi = NULL;
+        CHECK(cjitter_run("climb", &bad, &b, &r) == -1, "run refuses a NULL upper bound");
+        bad = p; bad.lo = hi2; bad.hi = lo2;
+        CHECK(cjitter_run("climb", &bad, &b, &r) == -1, "run refuses an inverted box");
         bb = b; bb.evals = 0;
         CHECK(cjitter_run("climb", &p, &bb, &r) == -1, "run refuses a budget of no evaluations");
+        bb = b; bb.jitter = -0.1;
+        CHECK(cjitter_run("climb", &p, &bb, &r) == -1, "run refuses a negative jitter");
+        bb = b; bb.pop = -1;
+        CHECK(cjitter_run("ga", &p, &bb, &r) == -1, "run refuses a negative population");
         CHECK(w.calls == 0, "and no refusal called the fitness even once");
+    }
+
+    /* A fitness that never returns a finite value: the returned point must still be one that
+     * was scored, inside the box, never uninitialized memory handed back with rc 0. */
+    {
+        cjitter_problem p = { 2, lo2, hi2, always_worst, NULL, NULL };
+        cjitter_budget b = { 50, 1, 0.1, 0 };
+        double x[2] = { 12345.0, 67890.0 };
+        cjitter_result r = { 0, x, 0, 0, NULL };
+        CHECK(cjitter_run("random", &p, &b, &r) == 0 &&
+              x[0] >= lo2[0] && x[0] <= hi2[0] && x[1] >= lo2[1] && x[1] <= hi2[1],
+              "a fitness stuck at HUGE_VAL still returns a scored in-box point");
     }
 
     /* Each method, at budgets including 1 and an odd number: the budget is spent exactly, the
      * result is the minimum of what was scored, every point obeyed the box, and the same seed
-     * reproduces the same answer bit for bit. This is the library's whole promise. */
+     * reproduces the same answer bit for bit. */
     {
         static const long budgets[3] = { 1, 37, 300 };
         long m, bi;
@@ -139,13 +168,13 @@ int main(void)
                 if (cjitter_run(name, &p, &b, &r2) != 0 ||
                     r2.best != r.best || memcmp(x, y, sizeof x) != 0) again = 0;
             }
-            sprintf(msg, "%s: spends the budget exactly, at 1, 37 and 300", name);
+            snprintf(msg, sizeof msg, "%s: spends the budget exactly, at 1, 37 and 300", name);
             CHECK(exact, msg);
-            sprintf(msg, "%s: best is the minimum scored, and re-scoring it agrees", name);
+            snprintf(msg, sizeof msg, "%s: best is the minimum scored, and re-scoring it agrees", name);
             CHECK(isbest, msg);
-            sprintf(msg, "%s: never scores a point outside the box", name);
+            snprintf(msg, sizeof msg, "%s: never scores a point outside the box", name);
             CHECK(inbox, msg);
-            sprintf(msg, "%s: the same seed reproduces best and point bit for bit", name);
+            snprintf(msg, sizeof msg, "%s: the same seed reproduces best and point bit for bit", name);
             CHECK(again, msg);
         }
     }
@@ -169,29 +198,50 @@ int main(void)
         CHECK(returned, "repair: every returned best satisfies it too");
     }
 
-    /* The tuning: NULL, a zeroed struct and the explicit defaults are the same run bit for
-     * bit, and a negative field is refused before the fitness is ever called. */
+    /* The tuning: NULL and cjitter_tuning_default(n) are the same run bit for bit; every
+     * field is literal, so a zeroed struct is refused rather than silently defaulted, a
+     * field with the wrong sign is refused (anneal_cool_ln is only valid NEGATIVE, the case
+     * an earlier blanket "negatives are refused" sentence got backwards), and ga_mutate 0
+     * is a real mutation ablation that runs. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 300, 9, 0.1, 0 };
-        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0 };
-        cjitter_tuning dflt = { 0, 0.5, 1.0 / 64.0, 20, -6.907755278982137, 0.9, 0.3 };
-        cjitter_tuning bad = { -1, 0, 0, 0, 0, 0, 0 };
-        double x[2], y[2], z2[2];
+        cjitter_tuning dflt = cjitter_tuning_default(2);
+        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0 };
+        cjitter_tuning bad;
+        double x[2], y[2];
         cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
-        cjitter_result r3 = { 0, z2, 0, 0, NULL };
+        CHECK(dflt.climb_patience == 60, "tuning_default: patience is 40 + 10n");
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 &&
-              cjitter_run_tuned("climb", &p, &b, &zero, &r2) == 0 &&
-              cjitter_run_tuned("climb", &p, &b, &dflt, &r3) == 0 &&
-              r.best == r2.best && r.best == r3.best &&
-              memcmp(x, y, sizeof x) == 0 && memcmp(x, z2, sizeof x) == 0,
-              "tuning: NULL, zeroed and explicit defaults are the same run bit for bit");
+              cjitter_run_tuned("climb", &p, &b, &dflt, &r2) == 0 &&
+              r.best == r2.best && memcmp(x, y, sizeof x) == 0,
+              "tuning: NULL and the returned defaults are the same run bit for bit");
         w.calls = 0;
-        CHECK(cjitter_run_tuned("climb", &p, &b, &bad, &r) == -1 && w.calls == 0,
-              "tuning: a negative field is refused, before any evaluation");
-        CHECK(cjitter_compare_tuned(&p, &b, &bad, 2, NULL) == -1,
-              "tuning: compare refuses it too");
+        CHECK(cjitter_run_tuned("climb", &p, &b, &zero, &r) == -1 && w.calls == 0,
+              "tuning: a zeroed struct is refused, before any evaluation");
+        bad = dflt; bad.anneal_cool_ln = 1.0;
+        CHECK(cjitter_run_tuned("anneal", &p, &b, &bad, &r) == -1,
+              "tuning: a positive anneal_cool_ln is refused");
+        bad = dflt; bad.ga_mutate = -0.1;
+        CHECK(cjitter_run_tuned("ga", &p, &b, &bad, &r) == -1,
+              "tuning: a negative ga_mutate is refused");
+        bad = dflt; bad.ga_mutate = 0;
+        CHECK(cjitter_run_tuned("ga", &p, &b, &bad, &r) == 0,
+              "tuning: ga_mutate 0 is an ablation that runs, not a default");
+        bad = dflt; bad.climb_shrink = 1.0;
+        {
+            FILE *tf = tmpfile();
+            long wrote = -1;
+            if (tf) {
+                int crc = cjitter_compare_tuned(&p, &b, &bad, 2, tf);
+                fseek(tf, 0, SEEK_END);
+                wrote = crc == -1 ? ftell(tf) : -1;
+                fclose(tf);
+            }
+            CHECK(wrote == 0,
+                  "tuning: compare refuses a bad one before printing anything");
+        }
     }
 
     /* Seed 0 is remapped inside run as it is in rng, so it works and reproduces. */
@@ -235,21 +285,21 @@ int main(void)
 
     /* The regression that motivated the exactness checks: a restart on the last evaluation,
      * the one path that scored twice in an iteration and spent budget+1. Found by probing 2400
-     * (method, seed, budget) triples against a build with the guard removed; seed 200 is the
-     * witness under the libm-free gauss (seed 157 was, under Box-Muller). The restart count is
+     * (method, seed, budget) triples against a build with the guard removed; seed 160 is the
+     * witness under the 64-bit generator (200 was under the 32-bit one). The restart count is
      * pinned so the witness cannot go vacuous: any drift in the climb trajectory -- jitter,
      * patience, acceptance -- changes it, and a changed count means the witness must be
      * re-derived by probing again, not re-pinned to the new number. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 5000, 200, 0.1, 0 };
+        cjitter_budget b = { 5000, 160, 0.1, 0 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL };
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 && w.calls == 5000 && r.evals == 5000,
               "climb: a restart on the last evaluation does not spend 5001");
-        CHECK(r.restarts == 6,
-              "climb: seed 200's trajectory still reaches the witness (re-derive if this moves)");
+        CHECK(r.restarts == 7,
+              "climb: seed 160's trajectory still reaches the witness (re-derive if this moves)");
     }
 
     /* cjitter_compare: refusals first, then the table itself, written to a tmpfile and read

@@ -3,8 +3,8 @@
 # No branch filter, deliberately. A `branches: [main]` copied into a repository whose branch is
 # `master` produces a workflow that never runs once while the README claims it does.
 #
-# macOS is here because clang's libm is not glibc's, and a library whose whole promise is
-# byte-for-byte determinism from a seed should meet a second libm early.
+# macOS is here because clang's libm is not glibc's, and the determinism claim should meet
+# a second libm early.
 name: checks
 
 on: [push, pull_request, workflow_dispatch]

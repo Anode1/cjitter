@@ -2,27 +2,18 @@
  *
  * Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
  *
- * MySQL Workbench lays out a diagram by heuristics and does it badly: edges run under tables and
- * cross each other, and every reverse-engineering of the schema scrambles the positions again.
- * Redrawing a 44-table diagram by hand costs about an hour.
- *
- * The observation that makes it tractable: when a migration adds ten tables, only those ten
- * need placing. The rest of the diagram must NOT move -- a reader who knows where a table sits
- * should still find it there. So the old coordinates are frozen and the search has 2k variables
- * for k new tables, not 2n.
- *
- * The graph is real: an anonymized production schema, 44 tables and 59 foreign-key edges on
- * the diagram, in the layout a person maintained by hand across migrations. The last migration
- * added ten tables; the frozen 34 keep the human's coordinates, the search places the ten, and
- * the human's own placement of them is scored as a reference beside the centroid heuristic.
- * data/PROVENANCE.md says where it comes from and what the anonymization changed.
+ * The graph is a real anonymized production schema (data/PROVENANCE.md has its story and the
+ * README the problem's). When a migration adds ten tables, only those ten need placing: the
+ * rest of the diagram must NOT move, a reader who knows where a table sits should still find
+ * it there. So the old coordinates are frozen and the search has 2k variables for k new
+ * tables, not 2n. The human's own placement of the ten is scored as a reference beside the
+ * centroid heuristic.
  *
  * OBJECTIVE, in tiers so that no weight has to be guessed:
  *   edges passing through a table   the length of the segment inside the rectangle, x100
  *   edges crossing each other       the count, x100
  *   edge length                     the total, x1, which breaks ties toward a tidy diagram
- * Node overlap and staying on canvas are HARD, enforced by the repair callback, so they can
- * never be traded against the tiers above.
+ * Node overlap and staying on canvas are HARD, enforced by the repair callback.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +26,12 @@
 #define MAXN 64
 #define MAXE 128
 
+/* Regenerating erd_data.h from a bigger schema must fail here, at compile time, never as a
+ * silent overflow of the fixed arrays below. */
+typedef char erd_tables_fit[(ERD_NFIXED + ERD_NNEW <= MAXN) ? 1 : -1];
+typedef char erd_edges_fit[(ERD_NEDGE <= MAXE) ? 1 : -1];
+typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
+
 /* The example's constants, in one place. W_TIER separates the objective's tiers by two orders
  * of magnitude, so length only ever breaks ties; PUSH_PASSES bounds the repair's overlap
  * resolution; the rest are the shipped budget, and every pinned number in tests/cli.sh and
@@ -46,9 +43,8 @@
 #define JITTER      0.25    /* first move size, as a fraction of the canvas */
 #define POP         30
 
-/* sqrt is the one libm call IEEE requires to be correctly rounded, so a length computed this
- * way is identical on every platform; hypot is not, and one ulp under an argmax is a
- * different layout. */
+/* sqrt is correctly rounded by IEEE requirement and hypot is not; cjitter.h states the
+ * discipline this length obeys. */
 static double seglen(double dx, double dy) { return sqrt(dx * dx + dy * dy); }
 
 typedef struct {
@@ -69,8 +65,7 @@ static void pos(const Erd *g, const double *v, long i, double *px, double *py)
 }
 
 /* Length of segment AB lying inside rectangle i. Continuous in the table's position, which a
- * crossing COUNT is not: a count is flat under small moves and gives the search nothing to
- * follow. */
+ * crossing COUNT is not; the README's objective section says why that matters. */
 static double through(const Erd *g, const double *v, long i, double ax, double ay,
                       double bx, double by)
 {
@@ -180,7 +175,7 @@ static double score(const double *v, void *ctx)
 /* Table k's centre clamped onto the canvas. Called after every move a repair makes, not once
  * before them: the overlap push-out below can shove a table outward, and a clamp that ran only
  * first left two thirds of repaired points off the canvas -- an infeasible layout returned as
- * best, which is the one thing a repair exists to make impossible. */
+ * best. */
 static void oncanvas(const Erd *g, long k, double *px, double *py)
 {
     if (*px < g->w[k]/2) *px = g->w[k]/2;
@@ -237,7 +232,7 @@ static void centroid_place(const Erd *g, double *x)
 static void svg_panel(const Erd *g, const double *v, double ox)
 {
     long a, i;
-    printf("  <rect x='%g' y='0' width='%g' height='%g' fill='#f8fafc' stroke='#cbd5e1'/>\n",
+    printf("  <rect x='%g' y='0' width='%g' height='%g' fill='#fafafa' stroke='#ccc'/>\n",
            ox, g->cw, g->ch);
     for (a = 0; a < g->ne; a++) {
         double ax, ay, bx, by;
@@ -245,7 +240,7 @@ static void svg_panel(const Erd *g, const double *v, double ox)
         pos(g, v, g->e[a][0], &ax, &ay);
         pos(g, v, g->e[a][1], &bx, &by);
         printf("  <line x1='%g' y1='%g' x2='%g' y2='%g' stroke='%s' stroke-width='2'/>\n",
-               ox + ax, ay, ox + bx, by, nu ? "#b45309" : "#94a3b8");
+               ox + ax, ay, ox + bx, by, nu ? "#c60" : "#999");
     }
     for (i = 0; i < g->n; i++) {
         double px, py;
@@ -254,10 +249,10 @@ static void svg_panel(const Erd *g, const double *v, double ox)
         printf("  <rect x='%g' y='%g' width='%g' height='%g' rx='6' fill='%s' "
                "stroke='%s' stroke-width='2'/>\n",
                ox + px - g->w[i]/2, py - g->h[i]/2, g->w[i], g->h[i],
-               nu ? "#fcd34d" : "#e2e8f0", nu ? "#92400e" : "#475569");
+               nu ? "#fc3" : "#e8e8e8", nu ? "#963" : "#555");
         printf("  <text x='%g' y='%g' text-anchor='middle' font-size='%d' fill='%s'>"
                "%s</text>\n", ox + px, py + 8, nu ? 26 : 24,
-               nu ? "#78350f" : "#334155", erd_name[i]);
+               nu ? "#630" : "#333", erd_name[i]);
     }
 }
 
@@ -275,9 +270,9 @@ static void svg_out(const Erd *g, const double *xc, double sc,
     char t0[96], t1[96], t2[96];
     long j;
     v[0] = xc; v[1] = xb; v[2] = xh;
-    sprintf(t0, "initial: neighbours&#8217; centroid, score %.6g", sc);
-    sprintf(t1, "final: %s, score %.6g", method, sb);
-    sprintf(t2, "reference: the human&#8217;s accepted layout, score %.6g", sh);
+    snprintf(t0, sizeof t0, "initial: neighbours&#8217; centroid, score %.6g", sc);
+    snprintf(t1, sizeof t1, "final: %s at seed 1, score %.6g", method, sb);
+    snprintf(t2, sizeof t2, "reference: the human&#8217;s accepted layout, score %.6g", sh);
     title[0] = t0; title[1] = t1; title[2] = t2;
     printf("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 %g %g' "
            "font-family='sans-serif'>\n", W, H);
@@ -374,7 +369,9 @@ int main(int argc, char **argv)
 
     r.x = x;
     if (cjitter_run("climb", &p, &b, &r) == 0) {
-        printf("\nbest layout found by %s, score %.6g:\n", r.method, r.best);
+        /* One run at seed 1, the run --svg draws. Its score sits somewhere in the table's
+         * per-seed spread; calling it "best" implied the best of the panel, which it is not. */
+        printf("\nthe layout %s found at seed 1, score %.6g:\n", r.method, r.best);
         for (k = 0; k < nnew; k++)
             printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
     }

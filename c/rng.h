@@ -1,10 +1,14 @@
 /* rng.h -- a small deterministic pseudo-random generator.
  *
- * Reproducibility is a first-class requirement: the same seed must give the
- * same weight initialization and the same GA run on every machine, so results
- * are comparable and bugs are reproducible. This is a 32-bit xorshift (Marsaglia
- * 2003): tiny, fast, no dependencies, good enough for weight init and evolution.
- * It is NOT cryptographic. Pure: no allocation, caller owns the state.
+ * Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
+ *
+ * xorshift64* (Vigna 2016 after Marsaglia 2003): a 64-bit xorshift state with a
+ * multiplicative scramble, returning the high 32 bits. Integer arithmetic only,
+ * so the stream is identical on every machine. The period is 2^64-1, which is
+ * what lets compare's seed panel space its streams without collision: the
+ * predecessor's 32-bit generator had seed streams overlapping after 1.6e8
+ * draws, a budget a plain command-line argument can reach. NOT cryptographic.
+ * Pure: no allocation, caller owns the state.
  */
 #ifndef CJITTER_RNG_H
 #define CJITTER_RNG_H
@@ -12,9 +16,9 @@
 #include <stdint.h>
 
 
-/* The whole generator state: one 32-bit word. Copyable by value. */
+/* The whole generator state: one 64-bit word. Copyable by value. */
 typedef struct {
-    uint32_t s;
+    uint64_t s;
 } Rng;
 
 /* Seed the generator. Any seed is accepted; 0 is remapped (xorshift cannot
@@ -26,9 +30,5 @@ uint32_t rng_u32(Rng *r);
 
 /* Uniform real in [lo, hi). */
 double rng_uniform(Rng *r, double lo, double hi);
-
-/* Approximately standard-normal N(0,1), via the central-limit sum of 12 uniforms
- * (no libm dependency); adequate for self-adaptive mutation. */
-double rng_gaussian(Rng *r);
 
 #endif /* CJITTER_RNG_H */
