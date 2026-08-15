@@ -27,9 +27,9 @@ On the label problem, at 36% area coverage:
 
     method         median       spread  vs random
     random        187.046      22.2028 the control
-    climb         36.9614      37.2604     better
-    anneal        114.626      55.8446     better
-    ga            192.247      41.6418  no better
+    climb         15.3685      44.6581     better
+    anneal        121.731      77.3957     better
+    ga            195.553      6.59542  no better
 
 The GA is no better than uniform sampling at equal cost. That is the sort of thing this library
 exists to say, and it said it on the first run.
@@ -44,33 +44,35 @@ callback rather than by a penalty term, so it can never be traded against the ob
 entity-relationship diagram by heuristics and does it badly, and every reverse-engineering of the
 schema scrambles the positions. Redrawing a 44-table diagram by hand costs about an hour.
 
-The observation that makes it tractable: when a migration adds three tables, only those three need
-placing. Freezing the rest is not a compromise for tractability -- a reader who knows where a table
-sits should still find it there -- and it turns 88 free variables into 6.
+The graph is real: an anonymized production schema -- 44 tables, 59 foreign-key edges on the
+diagram, in the layout a person maintained by hand across migrations (`example/erd/data/`,
+provenance and anonymization in `data/PROVENANCE.md`). The last migration added ten tables. The
+observation that makes the problem tractable: only those ten need placing. Freezing the rest is
+not a compromise for tractability -- a reader who knows where a table sits should still find it
+there -- and it turns 88 free variables into 20.
 
-    12 tables already placed, 3 added by a migration, 23 foreign keys.
+    34 tables already placed, 10 added by a migration, 59 foreign keys.
 
-    centroid        55887.3   (place each new table at its neighbours' centroid)
+    centroid         251673   (place each new table at its neighbours' centroid)
+    human            231877   (where the human actually put them)
 
     method         median       spread  vs random
-    random        18822.1      6194.98 the control
-    climb         10269.1      1869.58     better
-    anneal        10446.7      4961.21     better
-    ga            10174.1      3798.34     better
+    random         233513      78056.9 the control
+    climb          109221      67136.9     better
+    anneal         172069       106754     better
+    ga             127781        16608     better
 
-All three searches beat the control here, and the obvious heuristic loses badly: placing a table at
-its neighbours' centroid drops it on top of the edges running between them. The layout the POC
-ships, reproduced digit for digit by `tests/cli.sh` on every run:
+All three searches beat the control, the heuristic loses -- placing a table at its neighbours'
+centroid drops it on top of the edges running between them -- and the searches also beat the
+layout the human actually accepted, roughly halving its score. Read that last result carefully:
+it says the human was optimizing things this objective cannot see -- semantic grouping, the
+matching row heights, room to grow -- not that the tool lays out diagrams better than a person.
+An objective is a specification, and this one specifies only crossings, penetrations and length.
+The shipped layout is pinned digit for digit by `tests/cli.sh` on every run.
 
-    best layout found by climb, score 10135.3:
-      new table 1 at (407, 204)
-      new table 2 at (649, 406)
-      new table 3 at (275, 390)
-
-`./erd --svg > erd.svg` draws it: initial state beside final state, the centroid heuristic's
-placement on the left and the search's on the right, the frozen twelve identical in both. The
-picture is the scores made visible -- the heuristic drops each new table onto the edges running
-between its neighbours.
+`./erd --svg > erd.svg` draws the three states stacked: the centroid heuristic, the search's
+answer, and the human's accepted layout, the frozen 34 identical in all three. The picture is
+the scores made visible.
 
 ## Writing an objective that a search can follow
 
@@ -102,12 +104,19 @@ Linux; and a reproducibility job that builds four ways -- two compilers, `-O0` a
 
 `-ffp-contract=off` is in the flags: a run must reproduce from its seed on another compiler and
 another architecture, and gcc contracts `a*b+c` into one FMA by default even under `-std=c99`.
+For the same reason no search trajectory calls libm beyond `sqrt`, the one function IEEE
+requires to be correctly rounded: the gaussian step is a sum of uniforms, anneal's schedule and
+acceptance use the library's own arithmetic `exp`, and the examples measure length with `sqrt`
+rather than `hypot`. One ulp of libm disagreement under an argmax is a different answer.
 
 ## Status
 
-Working library, two examples, both suites and CI. The `.mwb` reader is not written: the ERD
-example builds its graph in code. `.mwb` is a zip around `document.mwb.xml`, and the first task
-is mapping where the table objects and the diagram figure positions live and how they link.
+Working library, two examples, both suites and CI. The ERD example's graph is the real schema,
+carried as data (`example/erd/data/`): an anonymized `.mwb`, both revisions rendered to PNG,
+and the extracted geometry as JSON. A C reader for `.mwb` files is not written -- the format is
+a zip around `document.mwb.xml`; the figure positions live in `workbench.physical.TableFigure`
+objects (`type="real" key="left"` -- attribute order matters when grepping), foreign keys in
+`db.mysql.ForeignKey` objects whose `owner` link names the child table.
 
 ## See also
 

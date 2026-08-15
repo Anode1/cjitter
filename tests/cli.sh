@@ -89,49 +89,52 @@ check "erd runs"                     "$rc" "0"
 check "erd states the problem"       "$(printf '%s' "$out" | grep -c 'added by a migration')" "1"
 check "erd scores the centroid heuristic" \
       "$(printf '%s' "$out" | grep -c '^centroid ')" "1"
+check "erd scores the human's layout" \
+      "$(printf '%s' "$out" | grep -c '^human ')" "1"
 check "erd prints the table header"  "$(printf '%s' "$out" | grep -c 'vs random')" "1"
 check "erd reports all four methods" \
       "$(printf '%s' "$out" | grep -cE '^(random|climb|anneal|ga) ')" "4"
 check "erd prints the best layout"   \
       "$(printf '%s' "$out" | grep -c 'best layout found by')" "1"
-check "erd places every new table"   \
-      "$(printf '%s' "$out" | grep -c '^  new table ')" "3"
-# The repair's canvas bound, checked on what the run actually returned: a 130x90 table's centre
-# on the 900x600 canvas lies in [65,835] x [45,555]. The overlap push-out once shoved tables
-# past the clamp, and an infeasible layout was returned as best.
-check "every placed table is wholly on the canvas" \
+check "erd places every migration table" \
+      "$(printf '%s' "$out" | grep -c ' at (')" "10"
+# The repair's canvas bound, checked on what the run actually returned. The overlap push-out
+# once shoved tables past the clamp, and an infeasible layout was returned as best.
+check "every placed table is on the canvas" \
       "$(printf '%s' "$out" | sed -n 's/.*at (\([0-9]*\), \([0-9]*\)).*/\1 \2/p' | \
-         awk '$1<65||$1>835||$2<45||$2>555{bad++} END{print bad+0}')" "0"
+         awk '$1<0||$1>2949||$2<0||$2>1966{bad++} END{print bad+0}')" "0"
 
-# The oracle: the exact layout the POC ships, pinned coordinate by coordinate. The rerun check
-# above only catches nondeterminism; this catches a code change that silently moves the answer.
-# If a change moves these on purpose -- objective, search, repair -- re-measure, update the pin
-# AND the README, which quotes the same numbers.
-check "the POC score is the shipped one" \
+# The oracle: the exact layout the example ships. The rerun check above only catches
+# nondeterminism; this catches a code change that silently moves the answer. If a change moves
+# these on purpose -- objective, search, repair -- re-measure, update the pins AND the README,
+# which quotes the same scores.
+check "the reference scores are the shipped ones" \
+      "$(printf '%s' "$out" | grep -cE '^(centroid *251673|human *231877) ')" "2"
+check "the shipped layout's score is pinned" \
       "$(printf '%s' "$out" | grep 'best layout found')" \
-      "best layout found by climb, score 10135.3:"
-check "table 1 lands where the README says" \
-      "$(printf '%s' "$out" | grep 'new table 1')" "  new table 1 at (407, 204)"
-check "table 2 lands where the README says" \
-      "$(printf '%s' "$out" | grep 'new table 2')" "  new table 2 at (649, 406)"
-check "table 3 lands where the README says" \
-      "$(printf '%s' "$out" | grep 'new table 3')" "  new table 3 at (275, 390)"
+      "best layout found by climb, score 152528:"
+check "and its ten placements are pinned" \
+      "$(printf '%s' "$out" | grep ' at (' | digest)" \
+      "$(printf '%s\n' "  AI at (1486, 1471)" "  AM at (1041, 1198)" "  AP at (2394, 1087)" \
+         "  D at (915, 1822)" "  E at (157, 661)" "  J at (1863, 1478)" "  P at (1208, 695)" \
+         "  Q at (2054, 1856)" "  R at (2385, 392)" "  Y at (668, 1585)" | digest)"
 
 "$erd" > "$tmp/e1"
 "$erd" > "$tmp/e2"
 check "erd twice is byte-identical" "$(digest < "$tmp/e1")" "$(digest < "$tmp/e2")"
 
 # --svg: the same computation drawn instead of reported, so it must carry the same numbers as
-# the pinned report: both panel scores, and one rect per table in each panel (2x15) plus the
-# page and two canvases.
+# the pinned report: all three panel scores, and one rect per table in each of the three
+# panels (3x44) plus the page and three canvases.
 set +e
 "$erd" --svg > "$tmp/e.svg" 2>/dev/null; rc=$?
 set -e
 check "erd --svg exits 0"            "$rc" "0"
 check "and emits an svg"             "$(head -c 4 "$tmp/e.svg")" "<svg"
-check "with every table drawn twice" "$(grep -c '<rect' "$tmp/e.svg")" "33"
-check "carrying the pinned centroid score" "$(grep -c '55887.3' "$tmp/e.svg")" "1"
-check "and the pinned search score"  "$(grep -c '10135.3' "$tmp/e.svg")" "1"
+check "with every table drawn three times" "$(grep -c '<rect' "$tmp/e.svg")" "136"
+check "carrying the pinned centroid score" "$(grep -c '251673' "$tmp/e.svg")" "1"
+check "the pinned search score"      "$(grep -c '152528' "$tmp/e.svg")" "1"
+check "and the pinned human score"   "$(grep -c '231877' "$tmp/e.svg")" "1"
 set +e
 out=$("$erd" junk 2>&1 >/dev/null); rc=$?
 set -e

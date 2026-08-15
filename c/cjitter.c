@@ -26,13 +26,32 @@ typedef struct {
 
 static double uni(Rng *r) { return (double)rng_u32(r) / 4294967296.0; }
 
-/* Box-Muller, one value; the second is discarded. A normal step is what makes the move size
- * mean something across dimensions of different width. */
+/* Sum of 12 uniforms, mean 6, variance 1: an approximate normal in pure arithmetic. A normal
+ * step is what makes the move size mean something across dimensions of different width. An
+ * earlier version used Box-Muller, and its log and cos are exactly what breaks the
+ * reproduce-anywhere promise: libms round them differently, IEEE only guarantees sqrt.
+ * Every method's trajectory must be arithmetic and sqrt, nothing else. */
 static double gauss(Rng *r)
 {
-    double u = uni(r), v = uni(r);
-    if (u < 1e-12) u = 1e-12;
-    return sqrt(-2.0 * log(u)) * cos(6.283185307179586 * v);
+    double s = 0;
+    int i;
+    for (i = 0; i < 12; i++) s += uni(r);
+    return s - 6.0;
+}
+
+/* exp(x) for x <= 0, pure arithmetic: e^x = (e^(x/64))^64, the inner factor by Taylor series
+ * (|x/64| is small, so it converges in a few terms), the power by six squarings. Same reason
+ * as above: anneal's acceptance threshold must not depend on whose libm rounded exp. */
+static double exp_neg(double x)
+{
+    double y, t = 1.0, s = 1.0;
+    int i;
+    if (x > 0) x = 0;
+    if (x < -40) return 0;         /* below any acceptance probability a draw can meet */
+    y = x / 64.0;
+    for (i = 1; i <= 8; i++) { t *= y / (double)i; s += t; }
+    for (i = 0; i < 6; i++) s *= s;
+    return s;
 }
 
 static void clamp(const cjitter_problem *p, double *x)
@@ -144,10 +163,11 @@ static void run_anneal(Run *R, double jit)
     }
     while (R->spent < R->budget) {
         double g, frac = (double)R->spent / (double)R->budget;
-        t = t0 * pow(1e-3, frac);
+        /* 1e-3^frac, written as exp so the whole schedule stays libm-free */
+        t = t0 * exp_neg(frac * -6.907755278982137);
         jitter(R, R->x, R->cand, jit * (1.0 - 0.9 * frac));
         g = score(R, R->cand);
-        if (g < f || (t > 0 && uni(&R->rng) < exp((f - g) / t))) {
+        if (g < f || (t > 0 && uni(&R->rng) < exp_neg((f - g) / t))) {
             f = g;
             memcpy(R->x, R->cand, (size_t)R->p->n * sizeof *R->x);
             keep(R, R->x, f);

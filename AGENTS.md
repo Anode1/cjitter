@@ -30,7 +30,7 @@ them: an earlier working title, `gaop`, would have baked in a misattribution -- 
     make            # both examples
     make check      # ut + cliut -- the commit gate
     make ut         # unit suite, 47 checks: the library's contract, called as functions
-    make cliut      # black-box, 36 checks: the built examples through a shell
+    make cliut      # black-box, 37 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
@@ -59,7 +59,9 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
                     measurement that exhausted this period understated its own standard error
                     by 2.5x.
     example/labels.c    rectangles in a container, minimum overlap
-    example/erd/erd.c   tables added by a migration onto a frozen diagram
+    example/erd/erd.c   tables added by a migration onto a frozen diagram; --svg draws it
+    example/erd/data/   the real schema, anonymized: ERD.mwb, both revisions as PNG, the
+                        geometry as JSON, and PROVENANCE.md for what the anonymization changed
     tests/tests.c       unit suite: refusals, the exact budget, determinism, box and repair
     tests/cli.sh        black-box: exit codes, refusal messages, runs byte-identical over reruns
 
@@ -72,10 +74,13 @@ range is wide, and that rule punished a method for the control's variance.
 
 Two results so far, both from the shipped examples:
 
-- Labels at 36% coverage: climb 36.96, anneal 114.6, **ga 192.2 against random's 187.0 -- no
+- Labels at 36% coverage: climb 15.4, anneal 121.7, **ga 195.6 against random's 187.0 -- no
   better than uniform sampling at equal cost.**
-- ERD: all three beat the control; the centroid heuristic scores 55887 against the search's 10174,
-  because a table at its neighbours' centroid lands on the edges between them.
+- ERD, on the real anonymized schema (34 frozen tables, 10 added by the last migration): all
+  three beat the control, the centroid heuristic scores 251673, and the searches also beat the
+  human's accepted layout (231877, against climb's 109221 median). Read that carefully: it
+  means the human optimizes things the objective cannot see -- semantic grouping, aligned rows,
+  room to grow -- not that the tool out-draws a person. An objective is a specification.
 
 ## Writing an objective a search can follow
 
@@ -92,33 +97,30 @@ and crossings at 100, edge length at 1, so length only ever breaks ties.
 1. ~~**Unit suite and CI.**~~ Done: `make check` is ut + cliut, the sanitizers run both suites,
    and CI covers two platforms, six compiler/flag pairs and the byte-for-byte reproducibility
    job. Writing the exactness checks found the one path that could overspend the budget --
-   climb's restart could score twice in an iteration and spend budget+1 -- fixed with the
-   witness (seed 157 at 5000 evaluations) pinned as a regression check. Both examples' shipped
-   outputs were compared byte for byte across the fix: unchanged.
-2. **The `.mwb` reader.** `example/erd` builds its graph in code. A real `.mwb` is a zip around
-   `document.mwb.xml`; a grep for `key="left" type="real"` finds nothing, so the first task is
-   mapping where `db.mysql.Table` objects and the diagram figure positions live and how they link.
-   This is a parsing job; the layout is done.
+   climb's restart could score twice in an iteration and spend budget+1 -- fixed, with a probed
+   witness pinned as a regression check (currently climb seed 200 at 5000 evaluations,
+   restarts pinned at 6; re-derive by probing an unguarded build if the trajectory ever moves).
+   A later review round removed every libm call from the trajectories except sqrt -- Box-Muller
+   became a sum of uniforms, anneal's exp and pow became arithmetic -- because libms disagree in
+   the last ulp and one ulp under an argmax is a different answer.
+2. ~~**The real pair on the example.**~~ Done. `example/erd` now runs the real schema's latest
+   migration: 34 frozen tables at the human's coordinates, 10 added tables placed by the search,
+   the human's own placement scored as a reference. The data is committed anonymized under
+   `example/erd/data/` (see PROVENANCE.md there; the mapping back to real names is deliberately
+   not stored anywhere). Parsing detail that cost an hour: figure positions are attribute-order
+   `type="real" key="left"`, a FK's child table is its `owner` link, and an old document can
+   hold several diagrams -- take `currentDiagram`, except where it points at a stale one, so
+   trust the diagram whose FK links resolve.
 
-   **The benchmark already exists and nobody had to build it.** `~/kul` has **17 revisions of
-   `doc/DataModel/ERD.mwb` in git history** -- 16 consecutive before/after pairs, each one a real
-   migration with a layout a human accepted on both sides. Commit subjects name the change
-   ("added new asset set metadata table"). So for every pair you have: the previous diagram with
-   its coordinates, the new schema, and the placement a person actually chose. That is ground
-   truth for an incremental layouter, in quantity, for free.
-
-       git -C ~/kul log --oneline -- doc/DataModel/ERD.mwb
-       git -C ~/kul show REV:doc/DataModel/ERD.mwb > prev.mwb
-
-   The measurement that follows: freeze the old tables, place the ones the migration added, and
-   score the result against the human's placement -- and against the centroid heuristic, which
-   the example already shows losing badly. 16 pairs is enough to say whether the search beats the
-   heuristic in general rather than on one diagram, which is the only claim worth making.
-
-   `ERD.png` and `ERD_prev.png` are the current pair rendered, useful for judging by eye.
-   Credentials for the live schema are in `~/kul/java/conf/system.properties` if a reverse-
-   engineered comparison is wanted, but the git history alone is a richer source and needs no
-   database at all.
+   **The full benchmark still exists in `~/kul`:** 17 revisions of `doc/DataModel/ERD.mwb`,
+   16 consecutive before/after pairs, each a real migration with a human-accepted layout on
+   both sides. One pair is now the example; the measurement over all 16 -- freeze, place, score
+   against the human and the centroid -- is what a **`.mwb` reader in C** (or the committed
+   extraction script `data/gen_data.py` run over each pair) makes possible. 16 pairs is enough
+   to say whether the search beats the heuristic in general, which is the only claim worth
+   making. Caveat learned from the one shipped pair: under this objective the searches beat the
+   human, which means the objective is missing what the human optimizes -- treat the human
+   score as a reference, not a target to beat.
 3. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then
    interpolates between "nothing moves" and "full redraw". It also makes the search easier, by

@@ -208,22 +208,23 @@ int main(void)
               "climb: the restart path was exercised and reported");
     }
 
-    /* The regression that motivated the exactness checks: seed 157 at 5000 evaluations hits a
-     * restart on the last evaluation, the one path that scored twice in an iteration and spent
-     * 5001. Found by probing 2400 (method, seed, budget) triples; this is the witness. The
-     * restart count is pinned so the witness cannot go vacuous: any drift in the climb
-     * trajectory -- jitter, patience, acceptance -- changes it, and a changed count means the
-     * witness must be re-derived by probing again, not re-pinned to the new number. */
+    /* The regression that motivated the exactness checks: a restart on the last evaluation,
+     * the one path that scored twice in an iteration and spent budget+1. Found by probing 2400
+     * (method, seed, budget) triples against a build with the guard removed; seed 200 is the
+     * witness under the libm-free gauss (seed 157 was, under Box-Muller). The restart count is
+     * pinned so the witness cannot go vacuous: any drift in the climb trajectory -- jitter,
+     * patience, acceptance -- changes it, and a changed count means the witness must be
+     * re-derived by probing again, not re-pinned to the new number. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 5000, 157, 0.1, 0 };
+        cjitter_budget b = { 5000, 200, 0.1, 0 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL };
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 && w.calls == 5000 && r.evals == 5000,
               "climb: a restart on the last evaluation does not spend 5001");
-        CHECK(r.restarts == 7,
-              "climb: seed 157's trajectory still reaches the witness (re-derive if this moves)");
+        CHECK(r.restarts == 6,
+              "climb: seed 200's trajectory still reaches the witness (re-derive if this moves)");
     }
 
     /* cjitter_compare: refusals first, then the table itself, written to a tmpfile and read

@@ -6,24 +6,23 @@
  * cross each other, and every reverse-engineering of the schema scrambles the positions again.
  * Redrawing a 44-table diagram by hand costs about an hour.
  *
- * The observation that makes it tractable: when a migration adds three tables, only those three
+ * The observation that makes it tractable: when a migration adds ten tables, only those ten
  * need placing. The rest of the diagram must NOT move -- a reader who knows where a table sits
  * should still find it there. So the old coordinates are frozen and the search has 2k variables
  * for k new tables, not 2n.
  *
- * That is also why this is a fair demonstration of the library rather than a graph-drawing
- * paper: the search is small, the objective is cheap and exact, and there is a control (place
- * each new table at the centroid of its neighbours) that might simply win.
+ * The graph is real: an anonymized production schema, 44 tables and 59 foreign-key edges on
+ * the diagram, in the layout a person maintained by hand across migrations. The last migration
+ * added ten tables; the frozen 34 keep the human's coordinates, the search places the ten, and
+ * the human's own placement of them is scored as a reference beside the centroid heuristic.
+ * data/PROVENANCE.md says where it comes from and what the anonymization changed.
  *
  * OBJECTIVE, in tiers so that no weight has to be guessed:
  *   edges passing through a table   the length of the segment inside the rectangle, x100
- *   edges crossing each other       the count, x100, plus a continuous nearness term
+ *   edges crossing each other       the count, x100
  *   edge length                     the total, x1, which breaks ties toward a tidy diagram
  * Node overlap and staying on canvas are HARD, enforced by the repair callback, so they can
  * never be traded against the tiers above.
- *
- * This POC uses a graph built in code. Reading real coordinates out of a .mwb file (a zip around
- * document.mwb.xml) is the remaining work and is a parsing job, not a search one.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,15 +30,23 @@
 #include <math.h>
 
 #include "../../c/cjitter.h"
+#include "erd_data.h"
 
 #define MAXN 64
 #define MAXE 128
+
+/* sqrt is the one libm call IEEE requires to be correctly rounded, so a length computed this
+ * way is identical on every platform; hypot is not, and one ulp under an argmax is a
+ * different layout. */
+static double seglen(double dx, double dy) { return sqrt(dx * dx + dy * dy); }
 
 typedef struct {
     long   n, nfixed, ne;
     double x[MAXN], y[MAXN];       /* fixed tables keep these; free ones are read from the vector */
     double w[MAXN], h[MAXN];
     long   e[MAXE][2];
+    int    enew[MAXE];             /* does edge a touch a new table? decided once */
+    double konst;                  /* every term among frozen tables only, summed once */
     double cw, ch;
 } Erd;
 
@@ -50,21 +57,39 @@ static void pos(const Erd *g, const double *v, long i, double *px, double *py)
     else { *px = v[2 * (i - g->nfixed)]; *py = v[2 * (i - g->nfixed) + 1]; }
 }
 
-/* Length of segment AB lying inside rectangle i, sampled. Continuous in the table's position,
- * which a crossing COUNT is not: a count is flat under small moves and gives the search nothing
- * to follow. */
+/* Length of segment AB lying inside rectangle i. Continuous in the table's position, which a
+ * crossing COUNT is not: a count is flat under small moves and gives the search nothing to
+ * follow. */
 static double through(const Erd *g, const double *v, long i, double ax, double ay,
                       double bx, double by)
 {
-    double px, py, inside = 0;
-    long s, S = 24;
+    double px, py, dx = bx - ax, dy = by - ay, t0 = 0, t1 = 1;
+    double q[4], d[4];
+    long s;
     pos(g, v, i, &px, &py);
-    for (s = 0; s <= S; s++) {
-        double t = (double)s / (double)S;
-        double qx = ax + t * (bx - ax), qy = ay + t * (by - ay);
-        if (fabs(qx - px) < g->w[i] / 2 && fabs(qy - py) < g->h[i] / 2) inside++;
+    /* Bounding-box reject first: on 44 tables almost every rectangle is nowhere near the
+     * segment, and four comparisons here are what keep an evaluation cheap. */
+    if ((ax < px - g->w[i]/2 && bx < px - g->w[i]/2) ||
+        (ax > px + g->w[i]/2 && bx > px + g->w[i]/2) ||
+        (ay < py - g->h[i]/2 && by < py - g->h[i]/2) ||
+        (ay > py + g->h[i]/2 && by > py + g->h[i]/2)) return 0;
+    /* Liang-Barsky: clip the segment to the rectangle, exactly and in O(1). An earlier
+     * version sampled 25 points along the segment; the exact length is cheaper and has no
+     * sampling grain for the search to fall between. */
+    d[0] = -dx; q[0] = ax - (px - g->w[i]/2);
+    d[1] =  dx; q[1] = (px + g->w[i]/2) - ax;
+    d[2] = -dy; q[2] = ay - (py - g->h[i]/2);
+    d[3] =  dy; q[3] = (py + g->h[i]/2) - ay;
+    for (s = 0; s < 4; s++) {
+        if (d[s] == 0) {
+            if (q[s] < 0) return 0;              /* parallel to this edge and outside it */
+        } else {
+            double t = q[s] / d[s];
+            if (d[s] < 0) { if (t > t0) t0 = t; }
+            else          { if (t < t1) t1 = t; }
+        }
     }
-    return inside / (double)S * hypot(bx - ax, by - ay);
+    return t1 > t0 ? (t1 - t0) * seglen(dx, dy) : 0;
 }
 
 static int cross(double ax, double ay, double bx, double by,
@@ -77,22 +102,60 @@ static int cross(double ax, double ay, double bx, double by,
     return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0));
 }
 
+/* The incremental decomposition that makes the objective cheap: every term among frozen
+ * tables only -- frozen edge through frozen table, frozen-frozen crossing, frozen edge
+ * length -- is the same for every candidate, summed once into g->konst by frozen_part().
+ * score() then evaluates only what a candidate can change: terms touching a new table. */
+static double frozen_part(Erd *g)
+{
+    double total = 0;
+    long a, b, i;
+    for (a = 0; a < g->ne; a++) {
+        double ax, ay, bx, by;
+        g->enew[a] = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
+        if (g->enew[a]) continue;
+        pos(g, NULL, g->e[a][0], &ax, &ay);
+        pos(g, NULL, g->e[a][1], &bx, &by);
+        total += seglen(bx - ax, by - ay);
+        for (i = 0; i < g->nfixed; i++) {
+            if (i == g->e[a][0] || i == g->e[a][1]) continue;
+            total += 100.0 * through(g, NULL, i, ax, ay, bx, by);
+        }
+        for (b = a + 1; b < g->ne; b++) {
+            double cx, cy, dx, dy;
+            if (g->e[b][0] >= g->nfixed || g->e[b][1] >= g->nfixed) continue;
+            if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
+                g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
+            pos(g, NULL, g->e[b][0], &cx, &cy);
+            pos(g, NULL, g->e[b][1], &dx, &dy);
+            if (cross(ax, ay, bx, by, cx, cy, dx, dy)) total += 100.0;
+        }
+    }
+    return total;
+}
+
 static double score(const double *v, void *ctx)
 {
     Erd *g = ctx;
-    double total = 0, len = 0;
+    double total = g->konst, len = 0;
     long a, b, i;
     for (a = 0; a < g->ne; a++) {
         double ax, ay, bx, by;
         pos(g, v, g->e[a][0], &ax, &ay);
         pos(g, v, g->e[a][1], &bx, &by);
-        len += hypot(bx - ax, by - ay);
-        for (i = 0; i < g->n; i++) {
-            if (i == g->e[a][0] || i == g->e[a][1]) continue;
-            total += 100.0 * through(g, v, i, ax, ay, bx, by);
+        if (g->enew[a]) {
+            len += seglen(bx - ax, by - ay);
+            for (i = 0; i < g->n; i++) {
+                if (i == g->e[a][0] || i == g->e[a][1]) continue;
+                total += 100.0 * through(g, v, i, ax, ay, bx, by);
+            }
+        } else {
+            for (i = g->nfixed; i < g->n; i++)
+                total += 100.0 * through(g, v, i, ax, ay, bx, by);
         }
         for (b = a + 1; b < g->ne; b++) {
             double cx, cy, dx, dy;
+            if (!g->enew[a] && !g->enew[b]) continue;
             if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
                 g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
             pos(g, v, g->e[b][0], &cx, &cy);
@@ -181,32 +244,42 @@ static void svg_panel(const Erd *g, const double *v, double ox)
                "stroke='%s' stroke-width='2'/>\n",
                ox + px - g->w[i]/2, py - g->h[i]/2, g->w[i], g->h[i],
                nu ? "#fcd34d" : "#e2e8f0", nu ? "#92400e" : "#475569");
-        if (nu)
-            printf("  <text x='%g' y='%g' text-anchor='middle' font-size='18' "
-                   "fill='#78350f'>new %ld</text>\n", ox + px, py + 6, i - g->nfixed + 1);
-        else
-            printf("  <text x='%g' y='%g' text-anchor='middle' font-size='16' "
-                   "fill='#334155'>t%ld</text>\n", ox + px, py + 6, i);
+        printf("  <text x='%g' y='%g' text-anchor='middle' font-size='%d' fill='%s'>"
+               "%s</text>\n", ox + px, py + 8, nu ? 26 : 24,
+               nu ? "#78350f" : "#334155", erd_name[i]);
     }
 }
 
-/* Initial state beside final state: the centroid heuristic on the left, the search's answer on
- * the right, the frozen twelve identical in both. What the scores say, made visible: the
- * heuristic drops each new table onto the edges running between its neighbours. */
+/* Initial state, final state, and the reference: the centroid heuristic, the search's answer,
+ * and the layout the human actually accepted, stacked vertically, the frozen tables identical
+ * in all three. What the scores say, made visible: the heuristic drops each new table onto the
+ * edges running between its neighbours. */
 static void svg_out(const Erd *g, const double *xc, double sc,
-                    const double *xb, const char *method, double sb)
+                    const double *xb, const char *method, double sb,
+                    const double *xh, double sh)
 {
-    printf("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1870 665' "
-           "font-family='sans-serif'>\n");
-    printf("<rect width='1870' height='665' fill='white'/>\n");
-    printf("<text x='455' y='36' text-anchor='middle' font-size='20' fill='#111'>"
-           "initial: neighbours&#8217; centroid, score %.6g</text>\n", sc);
-    printf("<text x='1415' y='36' text-anchor='middle' font-size='20' fill='#111'>"
-           "final: %s, score %.6g</text>\n", method, sb);
-    printf("<g transform='translate(0,55)'>\n");
-    svg_panel(g, xc, 5);
-    svg_panel(g, xb, 965);
-    printf("</g>\n</svg>\n");
+    double W = g->cw + 10, band = 90, H = 3 * (g->ch + band) + 10;
+    const double *v[3];
+    const char *title[3];
+    char t0[96], t1[96], t2[96];
+    long j;
+    v[0] = xc; v[1] = xb; v[2] = xh;
+    sprintf(t0, "initial: neighbours&#8217; centroid, score %.6g", sc);
+    sprintf(t1, "final: %s, score %.6g", method, sb);
+    sprintf(t2, "reference: the human&#8217;s accepted layout, score %.6g", sh);
+    title[0] = t0; title[1] = t1; title[2] = t2;
+    printf("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 %g %g' "
+           "font-family='sans-serif'>\n", W, H);
+    printf("<rect width='%g' height='%g' fill='white'/>\n", W, H);
+    for (j = 0; j < 3; j++) {
+        double oy = (double)j * (g->ch + band);
+        printf("<text x='%g' y='%g' text-anchor='middle' font-size='44' fill='#111'>"
+               "%s</text>\n", W / 2, oy + 60, title[j]);
+        printf("<g transform='translate(0,%g)'>\n", oy + band);
+        svg_panel(g, v[j], 5);
+        printf("</g>\n");
+    }
+    printf("</svg>\n");
 }
 
 int main(int argc, char **argv)
@@ -215,7 +288,7 @@ int main(int argc, char **argv)
     cjitter_problem p;
     cjitter_budget b;
     cjitter_result r;
-    double lo[16], hi[16], x[16];
+    double lo[64], hi[64], x[64], xh[64];
     long i, k, nnew, nv;
     int want_svg = argc == 2 && !strcmp(argv[1], "--svg");
 
@@ -224,25 +297,20 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    /* Twelve existing tables on a grid, as Workbench would have left a tidy diagram, plus their
-     * foreign keys. Then three tables a migration has added, each keyed to existing ones. */
-    g.cw = 900; g.ch = 600;
-    g.nfixed = 12;
-    for (i = 0; i < 12; i++) {
-        g.x[i] = 120 + (double)(i % 4) * 220;
-        g.y[i] = 100 + (double)(i / 4) * 200;
-        g.w[i] = 130; g.h[i] = 90;
-    }
-    nnew = 3;
+    /* The anonymized production schema from erd_data.h: the frozen tables keep the human's
+     * coordinates, the added ones get theirs from the search. The human's own answer for them
+     * stays in erd_cx/erd_cy past nfixed, scored below as a reference. */
+    g.cw = ERD_CW; g.ch = ERD_CH;
+    g.nfixed = ERD_NFIXED;
+    nnew = ERD_NNEW;
     g.n = g.nfixed + nnew;
-    for (i = g.nfixed; i < g.n; i++) { g.w[i] = 130; g.h[i] = 90; }
-    g.ne = 0;
-    { long fk[][2] = { {0,1},{1,2},{2,3},{0,4},{4,5},{5,6},{6,7},{4,8},{8,9},{9,10},{10,11},
-                       {1,5},{2,6},{3,7},{5,9},{6,10},
-                       {12,1},{12,5},{13,3},{13,10},{14,0},{14,11},{14,6} };
-      for (i = 0; i < (long)(sizeof fk / sizeof fk[0]); i++) {
-          g.e[g.ne][0] = fk[i][0]; g.e[g.ne][1] = fk[i][1]; g.ne++;
-      } }
+    for (i = 0; i < g.n; i++) {
+        g.x[i] = erd_cx[i]; g.y[i] = erd_cy[i];
+        g.w[i] = erd_w[i];  g.h[i] = erd_h[i];
+    }
+    g.ne = ERD_NEDGE;
+    for (i = 0; i < g.ne; i++) { g.e[i][0] = erd_edge[i][0]; g.e[i][1] = erd_edge[i][1]; }
+    g.konst = frozen_part(&g);
 
     nv = 2 * nnew;
     for (i = 0; i < nv; i += 2) {
@@ -250,35 +318,45 @@ int main(int argc, char **argv)
         lo[i+1] = 0; hi[i+1] = g.ch;
     }
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = score; p.repair = legal; p.ctx = &g;
-    b.evals = 12000; b.seed = 1; b.jitter = 0.25; b.pop = 30;
+    b.evals = 8000; b.seed = 1; b.jitter = 0.25; b.pop = 30;
 
-    /* The picture instead of the report: centroid placement and search placement, one SVG to
+    /* The human's own answer: where the migration's tables sit in the accepted diagram. */
+    for (k = 0; k < nnew; k++) {
+        xh[2*k] = erd_cx[g.nfixed + k];
+        xh[2*k+1] = erd_cy[g.nfixed + k];
+    }
+
+    /* The picture instead of the report: centroid, search, and the human's layout, one SVG to
      * stdout, computed exactly as below so the two never disagree. */
     if (want_svg) {
-        double xc[16], xb[16], sc;
+        double xc[64], xb[64], sc, sh;
         centroid_place(&g, xc);
         legal(xc, &g);
         sc = score(xc, &g);
+        sh = score(xh, &g);
         r.x = xb;
         if (cjitter_run("climb", &p, &b, &r) != 0) {
             fprintf(stderr, "erd: search failed\n");
             return 1;
         }
-        svg_out(&g, xc, sc, xb, r.method, r.best);
+        svg_out(&g, xc, sc, xb, r.method, r.best, xh, sh);
         return 0;
     }
 
     printf("%ld tables already placed, %ld added by a migration, %ld foreign keys.\n",
            g.nfixed, nnew, g.ne);
-    printf("Only the new tables move. Objective: edges through tables and edge crossings,\n"
-           "weighted 100, plus total edge length. Lower is better.\n\n");
+    printf("A real schema, anonymized; see data/PROVENANCE.md. Only the new tables move.\n"
+           "Objective: edges through tables and edge crossings, weighted 100, plus total\n"
+           "edge length. Lower is better.\n\n");
 
     centroid_place(&g, x);
     legal(x, &g);
-    printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n\n",
+    printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n",
            "centroid", score(x, &g));
+    printf("%-10s %12.6g   (where the human actually put them)\n\n",
+           "human", score(xh, &g));
 
-    if (cjitter_compare(&p, &b, 7, stdout) != 0) {
+    if (cjitter_compare(&p, &b, 5, stdout) != 0) {
         fprintf(stderr, "erd: comparison failed\n");
         return 1;
     }
@@ -287,7 +365,7 @@ int main(int argc, char **argv)
     if (cjitter_run("climb", &p, &b, &r) == 0) {
         printf("\nbest layout found by %s, score %.6g:\n", r.method, r.best);
         for (k = 0; k < nnew; k++)
-            printf("  new table %ld at (%.0f, %.0f)\n", k + 1, x[2*k], x[2*k+1]);
+            printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
     }
     return 0;
 }
