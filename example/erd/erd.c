@@ -102,18 +102,28 @@ static double score(const double *v, void *ctx)
     return total + len;
 }
 
+/* Table k's centre clamped onto the canvas. Called after every move a repair makes, not once
+ * before them: the overlap push-out below can shove a table outward, and a clamp that ran only
+ * first left two thirds of repaired points off the canvas -- an infeasible layout returned as
+ * best, which is the one thing a repair exists to make impossible. */
+static void oncanvas(const Erd *g, long k, double *px, double *py)
+{
+    if (*px < g->w[k]/2) *px = g->w[k]/2;
+    if (*px > g->cw - g->w[k]/2) *px = g->cw - g->w[k]/2;
+    if (*py < g->h[k]/2) *py = g->h[k]/2;
+    if (*py > g->ch - g->h[k]/2) *py = g->ch - g->h[k]/2;
+}
+
 /* Hard: on the canvas, and not overlapping any table. Enforced by moving the proposal, so an
- * unreadable diagram is never a candidate at all. */
+ * unreadable diagram is never a candidate at all. The canvas bound holds by construction at
+ * every step; the push-out is best-effort within it, over a fixed number of passes. */
 static void legal(double *v, void *ctx)
 {
     Erd *g = ctx;
     long k, i, pass;
     for (k = g->nfixed; k < g->n; k++) {
         double *px = &v[2 * (k - g->nfixed)], *py = &v[2 * (k - g->nfixed) + 1];
-        if (*px < g->w[k]/2) *px = g->w[k]/2;
-        if (*px > g->cw - g->w[k]/2) *px = g->cw - g->w[k]/2;
-        if (*py < g->h[k]/2) *py = g->h[k]/2;
-        if (*py > g->ch - g->h[k]/2) *py = g->ch - g->h[k]/2;
+        oncanvas(g, k, px, py);
         for (pass = 0; pass < 4; pass++)
             for (i = 0; i < g->n; i++) {
                 double qx, qy, ox, oy;
@@ -124,6 +134,7 @@ static void legal(double *v, void *ctx)
                 if (ox > 0 && oy > 0) {          /* push out along the shallower axis */
                     if (ox < oy) *px += (*px < qx ? -ox : ox);
                     else         *py += (*py < qy ? -oy : oy);
+                    oncanvas(g, k, px, py);
                 }
             }
     }
@@ -187,7 +198,10 @@ int main(void)
     printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n\n",
            "centroid", score(x, &g));
 
-    cjitter_compare(&p, &b, 7, stdout);
+    if (cjitter_compare(&p, &b, 7, stdout) != 0) {
+        fprintf(stderr, "erd: comparison failed\n");
+        return 1;
+    }
 
     r.x = x;
     if (cjitter_run("climb", &p, &b, &r) == 0) {

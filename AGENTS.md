@@ -28,9 +28,23 @@ them: an earlier working title, `gaop`, would have baked in a misattribution -- 
 ## Build and test
 
     make            # both examples
-    make check      # run them
+    make check      # ut + cliut -- the commit gate
+    make ut         # unit suite, 47 checks: the library's contract, called as functions
+    make cliut      # black-box, 25 checks: the built examples through a shell
+    make ut-asan    # both suites under AddressSanitizer
+    make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
     make clean
+
+**`make ut` cannot see a refusal's exit code or message**, only a return value; those checks live
+in `tests/cli.sh`, along with byte-for-byte reproducibility of a whole run. When something no
+test caught gets through, the first question is which suite could have caught it. CI
+(`.github/workflows/checks.yml`) is three separate jobs, not a cross-product: the full battery
+on Linux and macOS with each platform's default compiler; `make check` across
+gcc-12/gcc-13/clang at `-O0` and `-O2` on Linux only; and a reproducibility job that builds
+four ways and compares both examples' output byte for byte -- `-march=native` is in that matrix
+because it is the flag that exposes FMA contraction. macOS never sees gcc and the sanitizers
+only ever run under the default compiler; do not read more coverage into it than that.
 
 `-ffp-contract=off` is in the flags. gcc contracts `a*b+c` into one FMA by default even under
 `-std=c99`, and x86-64 baseline hides it only because SSE2 has no FMA instruction; without the flag
@@ -46,6 +60,8 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
                     by 2.5x.
     example/labels.c    rectangles in a container, minimum overlap
     example/erd/erd.c   tables added by a migration onto a frozen diagram
+    tests/tests.c       unit suite: refusals, the exact budget, determinism, box and repair
+    tests/cli.sh        black-box: exit codes, refusal messages, runs byte-identical over reruns
 
 ## What is measured, and what it means
 
@@ -58,7 +74,7 @@ Two results so far, both from the shipped examples:
 
 - Labels at 36% coverage: climb 36.96, anneal 114.6, **ga 192.2 against random's 187.0 -- no
   better than uniform sampling at equal cost.**
-- ERD: all three beat the control; the centroid heuristic scores 55887 against the search's 10464,
+- ERD: all three beat the control; the centroid heuristic scores 55887 against the search's 10174,
   because a table at its neighbours' centroid lands on the edges between them.
 
 ## Writing an objective a search can follow
@@ -73,9 +89,12 @@ and crossings at 100, edge length at 1, so length only ever breaks ties.
 
 ## What is open, in the order to take it
 
-1. **Unit suite and CI.** Neither exists. Both examples run under `make check` and that is all.
-   bpnn's `tests/cli.sh` and `.github/workflows/checks.yml` are the models; the reproducibility
-   job there -- build four ways, compare the output byte for byte -- applies directly.
+1. ~~**Unit suite and CI.**~~ Done: `make check` is ut + cliut, the sanitizers run both suites,
+   and CI covers two platforms, six compiler/flag pairs and the byte-for-byte reproducibility
+   job. Writing the exactness checks found the one path that could overspend the budget --
+   climb's restart could score twice in an iteration and spend budget+1 -- fixed with the
+   witness (seed 157 at 5000 evaluations) pinned as a regression check. Both examples' shipped
+   outputs were compared byte for byte across the fix: unchanged.
 2. **The `.mwb` reader.** `example/erd` builds its graph in code. A real `.mwb` is a zip around
    `document.mwb.xml`; a grep for `key="left" type="real"` finds nothing, so the first task is
    mapping where `db.mysql.Table` objects and the diagram figure positions live and how they link.

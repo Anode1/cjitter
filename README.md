@@ -53,10 +53,10 @@ sits should still find it there -- and it turns 88 free variables into 6.
     centroid        55887.3   (place each new table at its neighbours' centroid)
 
     method         median       spread  vs random
-    random        16047.9      3584.17 the control
-    climb         10464.1      5275.91     better
-    anneal        11117.1      7029.57     better
-    ga            12362.7      4060.81     better
+    random        18822.1      6194.98 the control
+    climb         10269.1      1869.58     better
+    anneal        10446.7      4961.21     better
+    ga            10174.1      3798.34     better
 
 All three searches beat the control here, and the obvious heuristic loses badly: placing a table at
 its neighbours' centroid drops it on top of the edges running between them.
@@ -76,17 +76,26 @@ be returned as the best.
 ## Build and test
 
     make            build both examples
-    make check      run them
+    make check      ut + cliut -- the commit gate
+    make ut         unit suite: refusals, the exact budget, determinism, box and repair
+    make cliut      black-box: the built examples through a shell, exit codes and reproducibility
+    make ut-asan    both suites under AddressSanitizer
+    make ut-ubsan   both suites under UBSan
     make pedantic   -pedantic -Wextra over every source; must be clean
     make clean
+
+CI is three separate jobs, not a cross-product: the full battery on Linux and macOS with each
+platform's default compiler; `make check` across gcc-12/gcc-13/clang at `-O0` and `-O2` on
+Linux; and a reproducibility job that builds four ways -- two compilers, `-O0` and
+`-O2 -march=native` -- and compares both examples' output byte for byte.
 
 `-ffp-contract=off` is in the flags: a run must reproduce from its seed on another compiler and
 another architecture, and gcc contracts `a*b+c` into one FMA by default even under `-std=c99`.
 
 ## Status
 
-Working library, two examples, no unit suite yet and no CI. The `.mwb` reader is not written: the
-ERD example builds its graph in code. `.mwb` is a zip around `document.mwb.xml`, and the first task
+Working library, two examples, both suites and CI. The `.mwb` reader is not written: the ERD
+example builds its graph in code. `.mwb` is a zip around `document.mwb.xml`, and the first task
 is mapping where the table objects and the diagram figure positions live and how they link.
 
 ## See also

@@ -1,4 +1,11 @@
 c/*.o
 /labels
 /erd
+/cjitter_ut
+/cjitter_ut_asan
+/cjitter_ut_ubsan
+/labels_asan
+/erd_asan
+/labels_ubsan
+/erd_ubsan
 *.mwb.new

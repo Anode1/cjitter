@@ -2,6 +2,7 @@
  *
  * Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
  */
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,9 +54,13 @@ static void draw(Run *R, double *x)
 }
 
 /* Every evaluation goes through here, so the budget is exact and no method can quietly spend
- * more than another. That is the only thing that makes the comparison fair. */
+ * more than another. That is the only thing that makes the comparison fair. The methods are
+ * responsible for not calling past the budget; the assert is what makes a missed guard an
+ * immediate failure instead of a silently unfair comparison, which is how one overspend
+ * (climb's restart on the last evaluation) shipped before it existed. */
 static double score(Run *R, const double *x)
 {
+    assert(R->spent < R->budget);
     R->spent++;
     return R->p->fitness(x, R->p->ctx);
 }
@@ -103,7 +108,10 @@ static void run_climb(Run *R, double jit, long *restarts)
         } else if (++stuck >= patience) {
             scale *= 0.5;
             stuck = 0;
-            if (scale < jit / 64.0) {          /* as local as it is going to get: restart */
+            /* As local as it is going to get: restart -- but only if there is budget left to
+             * score the new start. Without the check this was the one path that could score
+             * twice in an iteration and spend budget+1, which the header says cannot happen. */
+            if (scale < jit / 64.0 && R->spent < R->budget) {
                 draw(R, R->x);
                 f = score(R, R->x);
                 keep(R, R->x, f);

@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
 #
-#   make | check | pedantic | examples | clean
+#   make | check | ut | cliut | ut-asan | ut-ubsan | pedantic | examples | clean
 SHELL = /bin/sh
 
 CC       ?= cc
@@ -18,9 +18,11 @@ HEADERS = $(wildcard c/*.h)
 SRC     = c/cjitter.c c/rng.c
 OBJ     = $(SRC:.c=.o)
 
-.PHONY: all check pedantic examples clean
+.PHONY: all check ut cliut ut-asan ut-ubsan pedantic examples clean
 
 all: examples
+
+check: ut cliut
 
 c/%.o: c/%.c $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -33,18 +35,40 @@ labels: example/labels.c $(OBJ) $(HEADERS)
 erd: example/erd/erd.c $(OBJ) $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ example/erd/erd.c $(OBJ) $(LIBM) $(LDLIBS)
 
-check: examples
-	./labels 40 4000 3 >/dev/null
-	./erd >/dev/null
-	@echo "check: both examples ran"
+# ut: in-process unit tests of the library's contract: refusals, the exact budget, determinism,
+# the box and the repair invariant. Built from sources, not objects, so a header change rebuilds.
+ut: cjitter_ut
+	./cjitter_ut
+cjitter_ut: tests/tests.c $(SRC) $(HEADERS)
+	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ tests/tests.c $(SRC) $(LIBM) $(LDLIBS)
+
+# cliut: black-box tests of the built examples. `make ut` calls functions, so it can never see
+# an exit code, a refusal message or whether a whole run reproduces byte for byte; these can.
+cliut: examples
+	sh tests/cli.sh
+
+# The sanitizers run both suites, because the examples' argument handling is only reachable
+# through the shell. -fno-sanitize-recover is what makes UBSan a gate rather than a report.
+SAN = -g -O1 -fno-omit-frame-pointer
+ut-asan: $(HEADERS)
+	$(CC) $(PROJ) $(SAN) -fsanitize=address -o cjitter_ut_asan tests/tests.c $(SRC) $(LIBM) && ./cjitter_ut_asan
+	$(CC) $(PROJ) $(SAN) -fsanitize=address -o labels_asan example/labels.c $(SRC) $(LIBM)
+	$(CC) $(PROJ) $(SAN) -fsanitize=address -o erd_asan example/erd/erd.c $(SRC) $(LIBM)
+	LABELS_BIN=$(CURDIR)/labels_asan ERD_BIN=$(CURDIR)/erd_asan sh tests/cli.sh
+ut-ubsan: $(HEADERS)
+	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o cjitter_ut_ubsan tests/tests.c $(SRC) $(LIBM) && ./cjitter_ut_ubsan
+	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o labels_ubsan example/labels.c $(SRC) $(LIBM)
+	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o erd_ubsan example/erd/erd.c $(SRC) $(LIBM)
+	LABELS_BIN=$(CURDIR)/labels_ubsan ERD_BIN=$(CURDIR)/erd_ubsan sh tests/cli.sh
 
 pedantic: $(HEADERS)
 	@rc=0; tmp=`mktemp -d`; \
-	for f in $(SRC) example/labels.c example/erd/erd.c; do \
+	for f in $(SRC) tests/tests.c example/labels.c example/erd/erd.c; do \
 	    $(CC) $(PROJ) -pedantic -Wextra -O2 -c "$$f" -o "$$tmp/p.o" || rc=1; \
 	done; \
 	rm -rf "$$tmp"; \
 	test $$rc -eq 0 && echo "pedantic: clean"; exit $$rc
 
 clean:
-	rm -f c/*.o labels erd
+	rm -f c/*.o labels erd cjitter_ut cjitter_ut_asan cjitter_ut_ubsan \
+	      labels_asan erd_asan labels_ubsan erd_ubsan
