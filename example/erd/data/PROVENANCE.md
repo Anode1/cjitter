@@ -5,7 +5,7 @@ layout a person maintained by hand across migrations. `ERD.png` is the current r
 the tables the last migration added drawn in amber; `ERD_prev.png` is the revision before it,
 36 tables. Both are drawn by `render.py` from the extracted geometry; a Workbench export would
 carry the real names. Between the two: ten tables added, two dropped. The pair is what an incremental
-layouter has to reproduce -- the previous diagram, the new schema, and a human's accepted
+layouter has to reproduce: the previous diagram, the new schema, and a human's accepted
 answer for where the new tables went.
 
 Anonymized before committing, structure untouched:
@@ -23,8 +23,8 @@ Anonymized before committing, structure untouched:
 - The `@db/data.db` sidecar (a Workbench cache) is not carried: a binary is where a missed
   name would hide. Workbench recreates it on open.
 
-The geometry -- positions, sizes, the canvas -- is untouched. That is the point: the layout is
-the ground truth, the names never mattered to it.
+The geometry is untouched: positions, sizes, the canvas. The layout is the ground truth and
+the names never mattered to it.
 
 `graph_anon.json` is the same content flattened for programs: per revision, each table's
 `[left, top, width, height]` and the FK edges between diagrammed tables, plus the list of

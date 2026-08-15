@@ -14,8 +14,8 @@ Workbench does badly and which costs about an hour by hand on a 44-table schema.
 
 The name is jitter, the regulariser from the author's 1997 thesis and the mechanism that made the
 2001 layout settle. It names what all four methods share, which is why it does not name one of
-them: an earlier working title, `gaop`, would have baked in a misattribution -- what solved the
-2001 problem was called a genetic algorithm and was in fact annealing with restarts.
+them: an earlier working title, `gaop`, would have baked in a misattribution, because what
+solved the 2001 problem was called a genetic algorithm and was in fact annealing with restarts.
 
 ## The contract (read first)
 
@@ -42,7 +42,7 @@ test caught gets through, the first question is which suite could have caught it
 (`.github/workflows/checks.yml`) is three separate jobs, not a cross-product: the full battery
 on Linux and macOS with each platform's default compiler; `make check` across
 gcc-12/gcc-13/clang at `-O0` and `-O2` on Linux only; and a reproducibility job that builds
-four ways and compares both examples' output byte for byte -- `-march=native` is in that matrix
+four ways and compares both examples' output byte for byte. `-march=native` is in that matrix
 because it is the flag that exposes FMA contraction. macOS never sees gcc and the sanitizers
 only ever run under the default compiler; do not read more coverage into it than that.
 
@@ -78,9 +78,9 @@ Two results so far, both from the shipped examples:
   better than uniform sampling at equal cost.**
 - ERD, on the real anonymized schema (34 frozen tables, 10 added by the last migration): all
   three beat the control, the centroid heuristic scores 251673, and the searches also beat the
-  human's accepted layout (231877, against climb's 109221 median). Read that carefully: it
-  means the human optimizes things the objective cannot see -- semantic grouping, aligned rows,
-  room to grow -- not that the tool out-draws a person. An objective is a specification.
+  human's accepted layout (231877, against climb's 109221 median). That result means the human
+  optimizes what the objective cannot see, semantic grouping, aligned rows, room to grow. The
+  tool is better only at what the objective names.
 
 ## The objective
 
@@ -96,12 +96,12 @@ and crossings at 100, edge length at 1, so length only ever breaks ties.
 
 1. ~~**Unit suite and CI.**~~ Done: `make check` is ut + cliut, the sanitizers run both suites,
    and CI covers two platforms, six compiler/flag pairs and the byte-for-byte reproducibility
-   job. Writing the exactness checks found the one path that could overspend the budget --
-   climb's restart could score twice in an iteration and spend budget+1 -- fixed, with a probed
+   job. Writing the exactness checks found the one path that could overspend the budget:
+   climb's restart could score twice in an iteration and spend budget+1. Fixed, with a probed
    witness pinned as a regression check (currently climb seed 200 at 5000 evaluations,
    restarts pinned at 6; re-derive by probing an unguarded build if the trajectory ever moves).
-   A later review round removed every libm call from the trajectories except sqrt -- Box-Muller
-   became a sum of uniforms, anneal's exp and pow became arithmetic -- because libms disagree in
+   A later review round removed every libm call from the trajectories except sqrt (Box-Muller
+   became a sum of uniforms, anneal's exp and pow became arithmetic), because libms disagree in
    the last ulp and one ulp under an argmax is a different answer.
 2. ~~**The real pair on the example.**~~ Done. `example/erd` now runs the real schema's latest
    migration: 34 frozen tables at the human's coordinates, 10 added tables placed by the search,
@@ -109,18 +109,18 @@ and crossings at 100, edge length at 1, so length only ever breaks ties.
    `example/erd/data/` (see PROVENANCE.md there; the mapping back to real names is deliberately
    not stored anywhere). Parsing detail that cost an hour: figure positions are attribute-order
    `type="real" key="left"`, a FK's child table is its `owner` link, and an old document can
-   hold several diagrams -- take `currentDiagram`, except where it points at a stale one, so
-   trust the diagram whose FK links resolve.
+   hold several diagrams. `currentDiagram` can point at a stale one, so trust the diagram
+   whose FK links resolve.
 
    **The full benchmark still exists in `~/kul`:** 17 revisions of `doc/DataModel/ERD.mwb`,
    16 consecutive before/after pairs, each a real migration with a human-accepted layout on
-   both sides. One pair is now the example; the measurement over all 16 -- freeze, place, score
-   against the human and the centroid -- is what a **`.mwb` reader in C** (or the committed
-   extraction script `data/gen_data.py` run over each pair) makes possible. 16 pairs is enough
-   to say whether the search beats the heuristic in general, which is the only claim worth
-   making. Caveat learned from the one shipped pair: under this objective the searches beat the
-   human, which means the objective is missing what the human optimizes -- treat the human
-   score as a reference, not a target to beat.
+   both sides. One pair is now the example; the measurement over all 16 (freeze, place, score
+   against the human and the centroid) is what a **`.mwb` reader in C** or the committed
+   extraction pipeline run over each pair makes possible. 16 pairs is enough to say whether
+   the search beats the heuristic in general, which is the only claim worth making. Caveat
+   learned from the one shipped pair: under this objective the searches beat the human, which
+   means the objective is missing what the human optimizes. Treat the human score as a
+   reference, not a target to beat.
 3. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then
    interpolates between "nothing moves" and "full redraw". It also makes the search easier, by

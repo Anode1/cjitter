@@ -44,18 +44,18 @@ penalty term, so it can never be traded against the objective.
 
 **`example/erd/`** is the application this was written for. Laying out a diagram with the
 fewest edge crossings is NP-complete (Garey and Johnson, *Crossing Number is NP-Complete*,
-SIAM J. Algebraic Discrete Methods 4:312-316, 1983), so a polynomial-time exact algorithm
-exists for nobody unless P = NP, and every drawing tool runs heuristics. MySQL Workbench's
-heuristics do it badly, every reverse-engineering of the schema scrambles the positions, and
-restoring this 44-table diagram by hand after each one cost the author about an hour. That
-recurring hour is the problem this example solves.
+SIAM J. Algebraic Discrete Methods 4:312-316, 1983), so there is no polynomial-time exact
+algorithm unless P = NP, and every drawing tool runs heuristics. MySQL Workbench's heuristics
+do it badly, every reverse-engineering of the schema scrambles the positions, and restoring
+this 44-table diagram by hand after each one cost the author about an hour. That recurring
+hour is the problem this example solves.
 
-The graph is real: an anonymized production schema -- 44 tables, 59 foreign-key edges on the
-diagram, in the layout a person maintained by hand across migrations (`example/erd/data/`,
-provenance and anonymization in `data/PROVENANCE.md`). The last migration added ten tables. The
-observation that makes the problem tractable: only those ten need placing. Freezing the rest is
-not a compromise for tractability -- a reader who knows where a table sits should still find it
-there -- and it turns 88 free variables into 20.
+The graph is real: an anonymized production schema of 44 tables and 59 foreign-key edges, in
+the layout a person maintained by hand across migrations (`example/erd/data/`, provenance and
+anonymization in `data/PROVENANCE.md`). The last migration added ten tables. The observation
+that makes the problem tractable: only those ten need placing. Freezing the rest is no
+compromise, since a reader who knows where a table sits should still find it there, and it
+turns 88 free variables into 20.
 
 Both revisions are in the repository, drawn by `data/render.py` from the extracted geometry.
 Neither image is a Workbench export; an export would carry the real names. The diagram before
@@ -78,13 +78,12 @@ and after it, the ten added tables in amber:
     anneal         172069       106754     better
     ga             127781        16608     better
 
-All three searches beat the control, the heuristic loses -- placing a table at its neighbours'
-centroid drops it on top of the edges running between them -- and the searches also beat the
-layout the human actually accepted, roughly halving its score. Read that last result carefully:
-it says the human was optimizing things this objective cannot see -- semantic grouping, the
-matching row heights, room to grow -- not that the tool lays out diagrams better than a person.
-An objective is a specification, and this one specifies only crossings, penetrations and length.
-The shipped layout is pinned digit for digit by `tests/cli.sh` on every run.
+All three searches beat the control. The heuristic loses: a table at its neighbours' centroid
+lands on the edges running between them. The searches also beat the layout the human accepted,
+roughly halving its score, and that result says less than it seems. The human was optimizing
+what this objective cannot see: semantic grouping, matching row heights, room to grow. The
+objective specifies crossings, penetrations and length, and the search is better only at
+those. The shipped layout is pinned digit for digit by `tests/cli.sh` on every run.
 
 `./erd --svg > erd.svg` draws the three states stacked: the centroid heuristic, the search's
 answer, and the human's accepted layout, the frozen 34 identical in all three. The picture is
@@ -115,8 +114,8 @@ be returned as the best.
 
 CI is three separate jobs, not a cross-product: the full battery on Linux and macOS with each
 platform's default compiler; `make check` across gcc-12/gcc-13/clang at `-O0` and `-O2` on
-Linux; and a reproducibility job that builds four ways -- two compilers, `-O0` and
-`-O2 -march=native` -- and compares both examples' output byte for byte.
+Linux; and a reproducibility job that builds four ways, two compilers at `-O0` and
+`-O2 -march=native`, and compares both examples' output byte for byte.
 
 `-ffp-contract=off` is in the flags: a run must reproduce from its seed on another compiler and
 another architecture, and gcc contracts `a*b+c` into one FMA by default even under `-std=c99`.
@@ -129,10 +128,10 @@ rather than `hypot`. One ulp of libm disagreement under an argmax is a different
 
 Working library, two examples, both suites and CI. The ERD example's graph is the real schema,
 carried as data (`example/erd/data/`): an anonymized `.mwb`, both revisions rendered to PNG,
-and the extracted geometry as JSON. A C reader for `.mwb` files is not written -- the format is
+and the extracted geometry as JSON. A C reader for `.mwb` files is not written. The format is
 a zip around `document.mwb.xml`; the figure positions live in `workbench.physical.TableFigure`
-objects (`type="real" key="left"` -- attribute order matters when grepping), foreign keys in
-`db.mysql.ForeignKey` objects whose `owner` link names the child table.
+objects (the attribute order is `type="real" key="left"`, which matters when grepping),
+foreign keys in `db.mysql.ForeignKey` objects whose `owner` link names the child table.
 
 ## See also
 
