@@ -40,9 +40,13 @@ exists to say, and it said it on the first run.
 deterministic objective; hard constraint (stay inside) enforced by clamping in the repair
 callback rather than by a penalty term, so it can never be traded against the objective.
 
-**`example/erd/`** is the application this was written for. MySQL Workbench lays out an
-entity-relationship diagram by heuristics and does it badly, and every reverse-engineering of the
-schema scrambles the positions. Redrawing a 44-table diagram by hand costs about an hour.
+**`example/erd/`** is the application this was written for. Laying out a diagram with the
+fewest edge crossings is NP-complete (Garey and Johnson, *Crossing Number is NP-Complete*,
+SIAM J. Algebraic Discrete Methods 4:312-316, 1983), so a polynomial-time exact algorithm
+exists for nobody unless P = NP, and every drawing tool runs heuristics. MySQL Workbench's
+heuristics do it badly, every reverse-engineering of the schema scrambles the positions, and
+restoring this 44-table diagram by hand after each one cost the author about an hour. That
+recurring hour is the problem this example solves.
 
 The graph is real: an anonymized production schema -- 44 tables, 59 foreign-key edges on the
 diagram, in the layout a person maintained by hand across migrations (`example/erd/data/`,
@@ -50,6 +54,8 @@ provenance and anonymization in `data/PROVENANCE.md`). The last migration added 
 observation that makes the problem tractable: only those ten need placing. Freezing the rest is
 not a compromise for tractability -- a reader who knows where a table sits should still find it
 there -- and it turns 88 free variables into 20.
+
+![The current revision: 44 tables, the ten the last migration added in amber](example/erd/data/ERD.png)
 
     34 tables already placed, 10 added by a migration, 59 foreign keys.
 
