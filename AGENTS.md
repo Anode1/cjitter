@@ -30,7 +30,7 @@ them: an earlier working title, `gaop`, would have baked in a misattribution -- 
     make            # both examples
     make check      # ut + cliut -- the commit gate
     make ut         # unit suite, 47 checks: the library's contract, called as functions
-    make cliut      # black-box, 25 checks: the built examples through a shell
+    make cliut      # black-box, 29 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean

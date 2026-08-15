@@ -59,7 +59,13 @@ sits should still find it there -- and it turns 88 free variables into 6.
     ga            10174.1      3798.34     better
 
 All three searches beat the control here, and the obvious heuristic loses badly: placing a table at
-its neighbours' centroid drops it on top of the edges running between them.
+its neighbours' centroid drops it on top of the edges running between them. The layout the POC
+ships, reproduced digit for digit by `tests/cli.sh` on every run:
+
+    best layout found by climb, score 10135.3:
+      new table 1 at (407, 204)
+      new table 2 at (649, 406)
+      new table 3 at (275, 390)
 
 ## Writing an objective that a search can follow
 

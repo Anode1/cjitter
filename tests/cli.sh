@@ -103,6 +103,20 @@ check "every placed table is wholly on the canvas" \
       "$(printf '%s' "$out" | sed -n 's/.*at (\([0-9]*\), \([0-9]*\)).*/\1 \2/p' | \
          awk '$1<65||$1>835||$2<45||$2>555{bad++} END{print bad+0}')" "0"
 
+# The oracle: the exact layout the POC ships, pinned coordinate by coordinate. The rerun check
+# above only catches nondeterminism; this catches a code change that silently moves the answer.
+# If a change moves these on purpose -- objective, search, repair -- re-measure, update the pin
+# AND the README, which quotes the same numbers.
+check "the POC score is the shipped one" \
+      "$(printf '%s' "$out" | grep 'best layout found')" \
+      "best layout found by climb, score 10135.3:"
+check "table 1 lands where the README says" \
+      "$(printf '%s' "$out" | grep 'new table 1')" "  new table 1 at (407, 204)"
+check "table 2 lands where the README says" \
+      "$(printf '%s' "$out" | grep 'new table 2')" "  new table 2 at (649, 406)"
+check "table 3 lands where the README says" \
+      "$(printf '%s' "$out" | grep 'new table 3')" "  new table 3 at (275, 390)"
+
 "$erd" > "$tmp/e1"
 "$erd" > "$tmp/e2"
 check "erd twice is byte-identical" "$(digest < "$tmp/e1")" "$(digest < "$tmp/e2")"
