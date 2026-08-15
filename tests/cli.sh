@@ -121,6 +121,23 @@ check "table 3 lands where the README says" \
 "$erd" > "$tmp/e2"
 check "erd twice is byte-identical" "$(digest < "$tmp/e1")" "$(digest < "$tmp/e2")"
 
+# --svg: the same computation drawn instead of reported, so it must carry the same numbers as
+# the pinned report: both panel scores, and one rect per table in each panel (2x15) plus the
+# page and two canvases.
+set +e
+"$erd" --svg > "$tmp/e.svg" 2>/dev/null; rc=$?
+set -e
+check "erd --svg exits 0"            "$rc" "0"
+check "and emits an svg"             "$(head -c 4 "$tmp/e.svg")" "<svg"
+check "with every table drawn twice" "$(grep -c '<rect' "$tmp/e.svg")" "33"
+check "carrying the pinned centroid score" "$(grep -c '55887.3' "$tmp/e.svg")" "1"
+check "and the pinned search score"  "$(grep -c '10135.3' "$tmp/e.svg")" "1"
+set +e
+out=$("$erd" junk 2>&1 >/dev/null); rc=$?
+set -e
+check "an unknown erd argument is refused" "$(firstline "$out")" "erd: --svg is the only option"
+check "unknown erd argument exit"    "$rc" "2"
+
 # ------------------------------------------------------------------ verdict
 
 echo "cli: $pass passed, $fail failed"

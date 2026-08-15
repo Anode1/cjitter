@@ -9,3 +9,4 @@ c/*.o
 /labels_ubsan
 /erd_ubsan
 *.mwb.new
+/erd.svg

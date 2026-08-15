@@ -67,6 +67,11 @@ ships, reproduced digit for digit by `tests/cli.sh` on every run:
       new table 2 at (649, 406)
       new table 3 at (275, 390)
 
+`./erd --svg > erd.svg` draws it: initial state beside final state, the centroid heuristic's
+placement on the left and the search's on the right, the frozen twelve identical in both. The
+picture is the scores made visible -- the heuristic drops each new table onto the edges running
+between its neighbours.
+
 ## Writing an objective that a search can follow
 
 The tiers in the ERD example are worth copying. Edges passing through a table are scored by the

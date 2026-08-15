@@ -27,6 +27,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 
 #include "../../c/cjitter.h"
@@ -140,14 +141,88 @@ static void legal(double *v, void *ctx)
     }
 }
 
-int main(void)
+/* The control that might simply win: each new table at the centroid of its neighbours. */
+static void centroid_place(const Erd *g, double *x)
+{
+    long i, k;
+    for (k = 0; k < g->n - g->nfixed; k++) {
+        double cx = 0, cy = 0;
+        long m = 0;
+        for (i = 0; i < g->ne; i++) {
+            long u = g->e[i][0], w = g->e[i][1];
+            if (u == g->nfixed + k && w < g->nfixed) { cx += g->x[w]; cy += g->y[w]; m++; }
+            if (w == g->nfixed + k && u < g->nfixed) { cx += g->x[u]; cy += g->y[u]; m++; }
+        }
+        x[2*k] = m ? cx / (double)m : g->cw / 2;
+        x[2*k+1] = m ? cy / (double)m : g->ch / 2;
+    }
+}
+
+/* One panel of the picture: the canvas, the edges under the tables (the new tables' edges
+ * darker, since they are the ones being judged), then every table with its name. */
+static void svg_panel(const Erd *g, const double *v, double ox)
+{
+    long a, i;
+    printf("  <rect x='%g' y='0' width='%g' height='%g' fill='#f8fafc' stroke='#cbd5e1'/>\n",
+           ox, g->cw, g->ch);
+    for (a = 0; a < g->ne; a++) {
+        double ax, ay, bx, by;
+        int nu = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
+        pos(g, v, g->e[a][0], &ax, &ay);
+        pos(g, v, g->e[a][1], &bx, &by);
+        printf("  <line x1='%g' y1='%g' x2='%g' y2='%g' stroke='%s' stroke-width='2'/>\n",
+               ox + ax, ay, ox + bx, by, nu ? "#b45309" : "#94a3b8");
+    }
+    for (i = 0; i < g->n; i++) {
+        double px, py;
+        int nu = i >= g->nfixed;
+        pos(g, v, i, &px, &py);
+        printf("  <rect x='%g' y='%g' width='%g' height='%g' rx='6' fill='%s' "
+               "stroke='%s' stroke-width='2'/>\n",
+               ox + px - g->w[i]/2, py - g->h[i]/2, g->w[i], g->h[i],
+               nu ? "#fcd34d" : "#e2e8f0", nu ? "#92400e" : "#475569");
+        if (nu)
+            printf("  <text x='%g' y='%g' text-anchor='middle' font-size='18' "
+                   "fill='#78350f'>new %ld</text>\n", ox + px, py + 6, i - g->nfixed + 1);
+        else
+            printf("  <text x='%g' y='%g' text-anchor='middle' font-size='16' "
+                   "fill='#334155'>t%ld</text>\n", ox + px, py + 6, i);
+    }
+}
+
+/* Initial state beside final state: the centroid heuristic on the left, the search's answer on
+ * the right, the frozen twelve identical in both. What the scores say, made visible: the
+ * heuristic drops each new table onto the edges running between its neighbours. */
+static void svg_out(const Erd *g, const double *xc, double sc,
+                    const double *xb, const char *method, double sb)
+{
+    printf("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1870 665' "
+           "font-family='sans-serif'>\n");
+    printf("<rect width='1870' height='665' fill='white'/>\n");
+    printf("<text x='455' y='36' text-anchor='middle' font-size='20' fill='#111'>"
+           "initial: neighbours&#8217; centroid, score %.6g</text>\n", sc);
+    printf("<text x='1415' y='36' text-anchor='middle' font-size='20' fill='#111'>"
+           "final: %s, score %.6g</text>\n", method, sb);
+    printf("<g transform='translate(0,55)'>\n");
+    svg_panel(g, xc, 5);
+    svg_panel(g, xb, 965);
+    printf("</g>\n</svg>\n");
+}
+
+int main(int argc, char **argv)
 {
     static Erd g;
     cjitter_problem p;
     cjitter_budget b;
     cjitter_result r;
-    double lo[16], hi[16], x[16], cx = 0, cy = 0;
+    double lo[16], hi[16], x[16];
     long i, k, nnew, nv;
+    int want_svg = argc == 2 && !strcmp(argv[1], "--svg");
+
+    if (argc > 1 && !want_svg) {
+        fprintf(stderr, "erd: --svg is the only option\n");
+        return 2;
+    }
 
     /* Twelve existing tables on a grid, as Workbench would have left a tidy diagram, plus their
      * foreign keys. Then three tables a migration has added, each keyed to existing ones. */
@@ -177,23 +252,28 @@ int main(void)
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = score; p.repair = legal; p.ctx = &g;
     b.evals = 12000; b.seed = 1; b.jitter = 0.25; b.pop = 30;
 
+    /* The picture instead of the report: centroid placement and search placement, one SVG to
+     * stdout, computed exactly as below so the two never disagree. */
+    if (want_svg) {
+        double xc[16], xb[16], sc;
+        centroid_place(&g, xc);
+        legal(xc, &g);
+        sc = score(xc, &g);
+        r.x = xb;
+        if (cjitter_run("climb", &p, &b, &r) != 0) {
+            fprintf(stderr, "erd: search failed\n");
+            return 1;
+        }
+        svg_out(&g, xc, sc, xb, r.method, r.best);
+        return 0;
+    }
+
     printf("%ld tables already placed, %ld added by a migration, %ld foreign keys.\n",
            g.nfixed, nnew, g.ne);
     printf("Only the new tables move. Objective: edges through tables and edge crossings,\n"
            "weighted 100, plus total edge length. Lower is better.\n\n");
 
-    /* The control that might simply win: each new table at the centroid of its neighbours. */
-    for (k = 0; k < nnew; k++) {
-        long m = 0;
-        cx = cy = 0;
-        for (i = 0; i < g.ne; i++) {
-            long u = g.e[i][0], w2 = g.e[i][1];
-            if (u == g.nfixed + k && w2 < g.nfixed) { cx += g.x[w2]; cy += g.y[w2]; m++; }
-            if (w2 == g.nfixed + k && u < g.nfixed) { cx += g.x[u]; cy += g.y[u]; m++; }
-        }
-        x[2*k] = m ? cx / (double)m : g.cw / 2;
-        x[2*k+1] = m ? cy / (double)m : g.ch / 2;
-    }
+    centroid_place(&g, x);
     legal(x, &g);
     printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n\n",
            "centroid", score(x, &g));
