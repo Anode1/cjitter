@@ -159,4 +159,4 @@ findings were selection artifacts; a better optimiser fixes none of that. The qu
 *can* answer cheaply is the methodological one: at what objective noise level does any search beat
 matched-budget random? Synthetic objective, known optimum, injected noise, sweep it. If nothing
 survives above the noise level that architecture search operates at, that settles the affordability
-question honestly and without a GPU.
+question without a GPU.
