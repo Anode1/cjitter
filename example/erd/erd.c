@@ -9,11 +9,15 @@
  * tables, not 2n. The human's own placement of the ten is scored as a reference beside the
  * centroid heuristic.
  *
- * OBJECTIVE, in tiers so that no weight has to be guessed:
- *   edges passing through a table   the length of the segment inside the rectangle, x100
- *   edges crossing each other       the count, x100
- *   edge length                     the total, x1, which breaks ties toward a tidy diagram
- * Node overlap and staying on canvas are HARD, enforced by the repair callback.
+ * Edges are routed the way the tool draws them, orthogonal polylines chosen by route_edge,
+ * and the OBJECTIVE reads the routed connectors, in tiers so that no weight has to be
+ * guessed:
+ *   a connector passing through a table   the length of the overlap, x100
+ *   connectors crossing each other        the count, x100
+ *   connector length                      the total, x1, breaking ties toward tidy
+ * Node overlap and staying on canvas are HARD, enforced by the repair callback. The router's
+ * quality is measured, not assumed: the run prints what it reproduces of the human layout's
+ * known 0 crossings and 0 penetration, and every score means only as much as that line.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,6 +51,14 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
  * discipline this length obeys. */
 static double seglen(double dx, double dy) { return sqrt(dx * dx + dy * dy); }
 
+/* A routed edge: an orthogonal polyline of up to four points, with its bounding box kept
+ * beside it so a crossing test can reject most pairs in four comparisons. */
+typedef struct {
+    double px[4], py[4];
+    int    np;
+    double minx, maxx, miny, maxy;
+} Route;
+
 typedef struct {
     long   n, nfixed, ne;
     double x[MAXN], y[MAXN];       /* fixed tables keep these; free ones are read from the vector */
@@ -54,6 +66,7 @@ typedef struct {
     long   e[MAXE][2];
     int    enew[MAXE];             /* does edge a touch a new table? decided once */
     double konst;                  /* every term among frozen tables only, summed once */
+    Route  rt[MAXE];               /* frozen routes fixed once; new-touching rerouted per score */
     double cw, ch;
 } Erd;
 
@@ -108,33 +121,141 @@ static int cross(double ax, double ay, double bx, double by,
     return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0));
 }
 
-/* The incremental decomposition that makes the objective cheap: every term among frozen
- * tables only -- frozen edge through frozen table, frozen-frozen crossing, frozen edge
- * length -- is the same for every candidate, summed once into g->konst by frozen_part().
- * score() then evaluates only what a candidate can change: terms touching a new table. */
+/* Penetration of an axis-aligned segment into table i: pure interval overlap, the fast path
+ * for routed segments, which are never diagonal. Falls back to the clip for anything else. */
+static double apen(const Erd *g, const double *v, long i,
+                   double x1, double y1, double x2, double y2)
+{
+    double px, py, lo, hi;
+    pos(g, v, i, &px, &py);
+    if (y1 == y2) {
+        if (y1 <= py - g->h[i]/2 || y1 >= py + g->h[i]/2) return 0;
+        lo = x1 < x2 ? x1 : x2;
+        hi = x1 < x2 ? x2 : x1;
+        if (lo < px - g->w[i]/2) lo = px - g->w[i]/2;
+        if (hi > px + g->w[i]/2) hi = px + g->w[i]/2;
+        return hi > lo ? hi - lo : 0;
+    }
+    if (x1 == x2) {
+        if (x1 <= px - g->w[i]/2 || x1 >= px + g->w[i]/2) return 0;
+        lo = y1 < y2 ? y1 : y2;
+        hi = y1 < y2 ? y2 : y1;
+        if (lo < py - g->h[i]/2) lo = py - g->h[i]/2;
+        if (hi > py + g->h[i]/2) hi = py + g->h[i]/2;
+        return hi > lo ? hi - lo : 0;
+    }
+    return through(g, v, i, x1, y1, x2, y2);
+}
+
+/* Route edge A as Workbench draws one: orthogonal segments at 0 and 90 degrees, never a
+ * diagonal. The candidates are the two L shapes and Z shapes whose middle segment slides
+ * across the channel between the endpoints and one step beyond it on either side, which is
+ * the nudge a person applies to a connector to clear an obstacle. The candidate with the
+ * least penetration wins, length breaking ties, the earlier shape winning exact ties so the
+ * choice is deterministic. Only the first NTAB tables exist for penetration, which is how
+ * frozen edges get routed against the frozen diagram alone. Returns the route's own cost,
+ * penetration at W_TIER plus length; crossings are the caller's to add, since they depend on
+ * every other route. */
+static double route_edge(const Erd *g, const double *v, long a, long ntab, Route *r,
+                         double *pen_out)
+{
+    static const double T[7] = { -0.25, 0.15, 0.3, 0.5, 0.7, 0.85, 1.25 };
+    double ax, ay, bx, by, bestcost = 0, bestpen = 0;
+    long e0 = g->e[a][0], e1 = g->e[a][1];
+    int c, have = 0;
+    pos(g, v, e0, &ax, &ay);
+    pos(g, v, e1, &bx, &by);
+    for (c = 0; c < 16; c++) {
+        Route cand;
+        double cost, pen = 0, len = 0;
+        long i;
+        int s;
+        if (c == 0) {                       /* L: horizontal, then vertical */
+            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = bx; cand.py[1] = ay;
+            cand.px[2] = bx; cand.py[2] = by; cand.np = 3;
+        } else if (c == 1) {                /* L: vertical, then horizontal */
+            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = ax; cand.py[1] = by;
+            cand.px[2] = bx; cand.py[2] = by; cand.np = 3;
+        } else if (c < 9) {                 /* Z: vertical middle segment */
+            double mx = ax + T[c - 2] * (bx - ax);
+            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = mx; cand.py[1] = ay;
+            cand.px[2] = mx; cand.py[2] = by; cand.px[3] = bx; cand.py[3] = by;
+            cand.np = 4;
+        } else {                            /* Z: horizontal middle segment */
+            double my = ay + T[c - 9] * (by - ay);
+            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = ax; cand.py[1] = my;
+            cand.px[2] = bx; cand.py[2] = my; cand.px[3] = bx; cand.py[3] = by;
+            cand.np = 4;
+        }
+        cand.minx = cand.maxx = cand.px[0];
+        cand.miny = cand.maxy = cand.py[0];
+        for (s = 1; s < cand.np; s++) {
+            if (cand.px[s] < cand.minx) cand.minx = cand.px[s];
+            if (cand.px[s] > cand.maxx) cand.maxx = cand.px[s];
+            if (cand.py[s] < cand.miny) cand.miny = cand.py[s];
+            if (cand.py[s] > cand.maxy) cand.maxy = cand.py[s];
+        }
+        for (i = 0; i < ntab; i++) {
+            double px, py;
+            if (i == e0 || i == e1) continue;
+            pos(g, v, i, &px, &py);
+            if (px + g->w[i]/2 < cand.minx || px - g->w[i]/2 > cand.maxx ||
+                py + g->h[i]/2 < cand.miny || py - g->h[i]/2 > cand.maxy) continue;
+            for (s = 0; s + 1 < cand.np; s++)
+                pen += apen(g, v, i, cand.px[s], cand.py[s],
+                            cand.px[s+1], cand.py[s+1]);
+        }
+        for (s = 0; s + 1 < cand.np; s++)
+            len += fabs(cand.px[s+1] - cand.px[s]) + fabs(cand.py[s+1] - cand.py[s]);
+        cost = W_TIER * pen + len;
+        if (!have || cost < bestcost) {
+            have = 1; bestcost = cost; bestpen = pen; *r = cand;
+        }
+        /* A clean candidate ends the search exactly: every in-range shape has the same
+         * Manhattan length and the detours are longer, so nothing later can cost less, and
+         * an equal-cost later shape would lose the tie anyway. */
+        if (bestpen == 0) break;
+    }
+    if (pen_out) *pen_out = bestpen;
+    return bestcost;
+}
+
+/* Crossings between two routed edges, bounding boxes first. Collinear overlaps are not
+ * counted: two connectors sharing a grid line is what an offset exists to fix in a tool,
+ * and the orientation test only sees proper crossings. */
+static long routes_cross(const Route *p, const Route *q)
+{
+    long k = 0;
+    int i, j;
+    if (p->maxx < q->minx || p->minx > q->maxx ||
+        p->maxy < q->miny || p->miny > q->maxy) return 0;
+    for (i = 0; i + 1 < p->np; i++)
+        for (j = 0; j + 1 < q->np; j++)
+            if (cross(p->px[i], p->py[i], p->px[i+1], p->py[i+1],
+                      q->px[j], q->py[j], q->px[j+1], q->py[j+1])) k++;
+    return k;
+}
+
+/* Everything among frozen tables only, summed once. Frozen edges are routed here against the
+ * frozen diagram and never again: a maintained diagram does not re-route its existing
+ * connectors when a migration adds tables, and the search should have to work around them
+ * where they already run. */
 static double frozen_part(Erd *g)
 {
     double total = 0;
-    long a, b, i;
+    long a, b;
     for (a = 0; a < g->ne; a++) {
-        double ax, ay, bx, by;
         g->enew[a] = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
+        if (!g->enew[a])
+            total += route_edge(g, NULL, a, g->nfixed, &g->rt[a], NULL);
+    }
+    for (a = 0; a < g->ne; a++) {
         if (g->enew[a]) continue;
-        pos(g, NULL, g->e[a][0], &ax, &ay);
-        pos(g, NULL, g->e[a][1], &bx, &by);
-        total += seglen(bx - ax, by - ay);
-        for (i = 0; i < g->nfixed; i++) {
-            if (i == g->e[a][0] || i == g->e[a][1]) continue;
-            total += W_TIER * through(g, NULL, i, ax, ay, bx, by);
-        }
         for (b = a + 1; b < g->ne; b++) {
-            double cx, cy, dx, dy;
-            if (g->e[b][0] >= g->nfixed || g->e[b][1] >= g->nfixed) continue;
+            if (g->enew[b]) continue;
             if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
                 g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
-            pos(g, NULL, g->e[b][0], &cx, &cy);
-            pos(g, NULL, g->e[b][1], &dx, &dy);
-            if (cross(ax, ay, bx, by, cx, cy, dx, dy)) total += W_TIER;
+            total += W_TIER * (double)routes_cross(&g->rt[a], &g->rt[b]);
         }
     }
     return total;
@@ -143,33 +264,55 @@ static double frozen_part(Erd *g)
 static double score(const double *v, void *ctx)
 {
     Erd *g = ctx;
-    double total = g->konst, len = 0;
+    double total = g->konst;
     long a, b, i;
+    int s;
+    /* the migration's edges, routed fresh around wherever its tables currently sit */
+    for (a = 0; a < g->ne; a++)
+        if (g->enew[a])
+            total += route_edge(g, v, a, g->n, &g->rt[a], NULL);
+    /* the fixed connectors, penetrating any new table parked on top of them */
     for (a = 0; a < g->ne; a++) {
-        double ax, ay, bx, by;
-        pos(g, v, g->e[a][0], &ax, &ay);
-        pos(g, v, g->e[a][1], &bx, &by);
-        if (g->enew[a]) {
-            len += seglen(bx - ax, by - ay);
-            for (i = 0; i < g->n; i++) {
-                if (i == g->e[a][0] || i == g->e[a][1]) continue;
-                total += W_TIER * through(g, v, i, ax, ay, bx, by);
-            }
-        } else {
-            for (i = g->nfixed; i < g->n; i++)
-                total += W_TIER * through(g, v, i, ax, ay, bx, by);
-        }
+        if (g->enew[a]) continue;
+        for (i = g->nfixed; i < g->n; i++)
+            for (s = 0; s + 1 < g->rt[a].np; s++)
+                total += W_TIER * apen(g, v, i, g->rt[a].px[s], g->rt[a].py[s],
+                                       g->rt[a].px[s+1], g->rt[a].py[s+1]);
+    }
+    /* crossings where at least one side belongs to the migration */
+    for (a = 0; a < g->ne; a++)
         for (b = a + 1; b < g->ne; b++) {
-            double cx, cy, dx, dy;
             if (!g->enew[a] && !g->enew[b]) continue;
             if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
                 g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
-            pos(g, v, g->e[b][0], &cx, &cy);
-            pos(g, v, g->e[b][1], &dx, &dy);
-            if (cross(ax, ay, bx, by, cx, cy, dx, dy)) total += W_TIER;
+            total += W_TIER * (double)routes_cross(&g->rt[a], &g->rt[b]);
         }
+    return total;
+}
+
+/* Route every edge against every table at layout V, as the diagram would actually be drawn,
+ * and report what a reader sees: crossings and total penetration. This is the calibration
+ * against the one certain fact about the human's layout, that it achieved zero of both by
+ * hand; a router that cannot reproduce that on the human's own coordinates is weaker than
+ * the tool the human was using. RT must hold ne routes. */
+static void layout_report(const Erd *g, const double *v, Route *rt,
+                          long *ncross, double *pen)
+{
+    long a, b, k = 0;
+    double p = 0;
+    for (a = 0; a < g->ne; a++) {
+        double ep;
+        route_edge(g, v, a, g->n, &rt[a], &ep);
+        p += ep;
     }
-    return total + len;
+    for (a = 0; a < g->ne; a++)
+        for (b = a + 1; b < g->ne; b++) {
+            if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
+                g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
+            k += routes_cross(&rt[a], &rt[b]);
+        }
+    *ncross = k;
+    *pen = p;
 }
 
 /* Table k's centre clamped onto the canvas. Called after every move a repair makes, not once
@@ -227,20 +370,23 @@ static void centroid_place(const Erd *g, double *x)
     }
 }
 
-/* One panel of the picture: the canvas, the edges under the tables (the new tables' edges
- * darker, since they are the ones being judged), then every table with its name. */
+/* One panel of the picture: the canvas, the routed connectors under the tables (the new
+ * tables' edges darker, since they are the ones being judged), then every table with its
+ * name. The routing drawn is the routing scored: the picture and the number cannot drift. */
 static void svg_panel(const Erd *g, const double *v, double ox)
 {
-    long a, i;
+    static Route rt[MAXE];
+    double pen;
+    long a, i, nc;
+    layout_report(g, v, rt, &nc, &pen);
     printf("  <rect x='%g' y='0' width='%g' height='%g' fill='#fafafa' stroke='#ccc'/>\n",
            ox, g->cw, g->ch);
     for (a = 0; a < g->ne; a++) {
-        double ax, ay, bx, by;
-        int nu = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
-        pos(g, v, g->e[a][0], &ax, &ay);
-        pos(g, v, g->e[a][1], &bx, &by);
-        printf("  <line x1='%g' y1='%g' x2='%g' y2='%g' stroke='%s' stroke-width='2'/>\n",
-               ox + ax, ay, ox + bx, by, nu ? "#c60" : "#999");
+        int nu = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed, s;
+        printf("  <polyline points='");
+        for (s = 0; s < rt[a].np; s++)
+            printf("%s%g,%g", s ? " " : "", ox + rt[a].px[s], rt[a].py[s]);
+        printf("' fill='none' stroke='%s' stroke-width='2'/>\n", nu ? "#c60" : "#999");
     }
     for (i = 0; i < g->n; i++) {
         double px, py;
@@ -352,15 +498,27 @@ int main(int argc, char **argv)
     printf("%ld tables already placed, %ld added by a migration, %ld foreign keys.\n",
            g.nfixed, nnew, g.ne);
     printf("A real schema, anonymized; see data/PROVENANCE.md. Only the new tables move.\n"
-           "Objective: edges through tables and edge crossings, weighted 100, plus total\n"
-           "edge length. Lower is better.\n\n");
+           "Edges are routed orthogonally, as the tool draws them. Objective: routed\n"
+           "penetration and crossings at 100, routed length at 1. Lower is better.\n\n");
 
     centroid_place(&g, x);
     legal(x, &g);
     printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n",
            "centroid", score(x, &g));
-    printf("%-10s %12.6g   (where the human actually put them)\n\n",
+    printf("%-10s %12.6g   (where the human actually put them)\n",
            "human", score(xh, &g));
+    /* The router's calibration, against the one certain fact about the human's layout: it
+     * achieved no crossings and no edge under a table. What the router reproduces of that is
+     * the router's quality, and every score above is only as meaningful as this line. */
+    {
+        static Route rt[MAXE];
+        double pen;
+        long nc;
+        layout_report(&g, xh, rt, &nc, &pen);
+        printf("%-10s %ld crossings, %.6g penetration when fully routed (the hand layout\n"
+               "%-10s achieved 0 and 0; the shortfall is the router's, not the human's)\n\n",
+               "", nc, pen, "");
+    }
 
     if (cjitter_compare(&p, &b, SEEDS, stdout) != 0) {
         fprintf(stderr, "erd: comparison failed\n");
@@ -369,11 +527,16 @@ int main(int argc, char **argv)
 
     r.x = x;
     if (cjitter_run("climb", &p, &b, &r) == 0) {
+        static Route rt[MAXE];
+        double pen;
+        long nc;
         /* One run at seed 1, the run --svg draws. Its score sits somewhere in the table's
-         * per-seed spread; calling it "best" implied the best of the panel, which it is not. */
+         * per-seed spread. */
         printf("\nthe layout %s found at seed 1, score %.6g:\n", r.method, r.best);
         for (k = 0; k < nnew; k++)
             printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
+        layout_report(&g, x, rt, &nc, &pen);
+        printf("fully routed: %ld crossings, %.6g penetration\n", nc, pen);
     }
     return 0;
 }

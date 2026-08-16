@@ -77,37 +77,48 @@ and after it, the ten added tables in amber:
 
 ![After the migration: 44 tables, the ten added in amber](example/erd/data/ERD.png)
 
+Edges are routed the way the tool draws them: orthogonal polylines, an L or a Z per
+connector, the middle segment sliding across the channel the way a person nudges a connector
+past an obstacle. The objective reads the routed connectors, and the router's quality is
+measured rather than assumed. The one certain fact about the human's layout is that it
+achieved zero crossings and zero edges under a table on screen; the run prints what the
+router reproduces of that, and every score below means only as much as that line:
+
     34 tables already placed, 10 added by a migration, 59 foreign keys.
 
-    centroid         251673   (place each new table at its neighbours' centroid)
-    human            231877   (where the human actually put them)
+    centroid         207656   (place each new table at its neighbours' centroid)
+    human            131154   (where the human actually put them)
+               36 crossings, 422 penetration when fully routed (the hand layout
+               achieved 0 and 0; the shortfall is the router's, not the human's)
 
     method         median        range    wins    sign-p   vs random
-    random         258611        23778       -         - the control
-    climb          126176      52628.2    5/5     0.0312      better
-    anneal         134884      55274.9    5/5     0.0312      better
-    ga            85123.4        16702    5/5     0.0312      better
+    random         108472      37413.6       -         - the control
+    climb         58150.6      37085.2    5/5     0.0312      better
+    anneal        63407.2      20087.3    5/5     0.0312      better
+    ga            59542.6      25886.3    5/5     0.0312      better
 
-All three searches beat the control on every seed. The heuristic loses: a table at its
-neighbours' centroid lands on the edges running between them. The searches also beat the
-layout the human accepted, and that result says less than it seems. The human was optimizing
-what this objective cannot see: semantic grouping, matching row heights, room to grow. The
-objective specifies crossings, penetrations and length, and the search is better only at
-those. One more honesty note: the objective charges the human for straight center-to-center
-edges, while the diagram the human actually maintained drew routed connectors, so some of the
-penetration charged to the human's score never existed on their screen.
+All three searches beat the control on every seed, and the heuristic loses: a table at its
+neighbours' centroid lands on the connectors running between its neighbours. Read the human
+row through the calibration line above it: most of the human's 131154 is the router failing
+to reproduce their connectors, which is why even the control's median outscores them here.
+The comparison that survives the router is the feasibility pair. The seed-1 search layout
+routes to 0 penetration and 63 crossings; the human's routes to 422 and 36. Each is winning
+at a different half of what the tool and the person jointly achieved as 0 and 0, and closing
+that gap is the router's open problem, not the search's.
 
-The report ends with the layout one run at seed 1 found, pinned digit for digit by
-`tests/cli.sh`; `./erd --svg > erd.svg` draws it between the two references, three states
-stacked, the frozen 34 identical in all three.
+The report ends with the layout one run at seed 1 found and its routed feasibility, pinned
+digit for digit by `tests/cli.sh`; `./erd --svg > erd.svg` draws the three states stacked
+with their actual routes, the frozen 34 identical in all three.
 
 ## The objective
 
-The tiers in the ERD example are worth copying. Edges passing through a table are scored by the
-*length of the segment inside the rectangle*, not by a count: a count is flat under small moves, so
-the search has nothing to follow and walks at random on the plateau. Crossings stay a count, at a
-weight two orders of magnitude above edge length, so ties break toward a tidy diagram without any
-weight having been guessed.
+The tiers in the ERD example are worth copying. A connector passing through a table is scored
+by the *length of the overlap*, not by a count: a count is flat under small moves, so the
+search has nothing to follow and walks at random on the plateau. Crossings stay a count, at a
+weight two orders of magnitude above connector length, so ties break toward a tidy diagram
+without any weight having been guessed. And when the medium being scored is not a straight
+line, score the medium: the ERD objective routes every connector before reading it, and
+prints how well that router reproduces the one layout whose on-screen quality is known.
 
 Node overlap and canvas bounds are hard constraints in the repair callback, for the reason
 `cjitter.h` gives at the `cjitter_repair` typedef.

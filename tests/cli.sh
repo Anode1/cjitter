@@ -91,6 +91,14 @@ check "erd scores the centroid heuristic" \
       "$(printf '%s' "$out" | grep -c '^centroid ')" "1"
 check "erd scores the human's layout" \
       "$(printf '%s' "$out" | grep -c '^human ')" "1"
+# The router's calibration against the one certain fact: the hand layout achieved 0 crossings
+# and 0 penetration. The printed shortfall is the router's floor and every score's caveat.
+check "erd prints the router calibration" \
+      "$(printf '%s' "$out" | grep 'penetration when fully routed')" \
+      "           36 crossings, 422 penetration when fully routed (the hand layout"
+check "erd routes the returned layout too" \
+      "$(printf '%s' "$out" | grep 'fully routed:')" \
+      "fully routed: 63 crossings, 0 penetration"
 check "erd prints the table header"  "$(printf '%s' "$out" | grep -c 'vs random')" "1"
 check "erd reports all four methods" \
       "$(printf '%s' "$out" | grep -cE '^(random|climb|anneal|ga) ')" "4"
@@ -113,15 +121,15 @@ check "and the pattern loses none of the ten lines" \
 # these on purpose -- objective, search, repair -- re-measure, update the pins AND the README,
 # which quotes the same scores.
 check "the reference scores are the shipped ones" \
-      "$(printf '%s' "$out" | grep -cE '^(centroid *251673|human *231877) ')" "2"
+      "$(printf '%s' "$out" | grep -cE '^(centroid *207656|human *131154) ')" "2"
 check "the shipped layout's score is pinned" \
       "$(printf '%s' "$out" | grep 'the layout climb found')" \
-      "the layout climb found at seed 1, score 130448:"
+      "the layout climb found at seed 1, score 58302.3:"
 check "and its ten placements are pinned" \
       "$(printf '%s' "$out" | grep ' at (' | digest)" \
-      "$(printf '%s\n' "  AI at (2463, 1042)" "  AM at (1549, 1031)" "  AP at (1359, 1147)" \
-         "  D at (960, 1854)" "  E at (371, 928)" "  J at (356, 1894)" "  P at (1992, 321)" \
-         "  Q at (2374, 825)" "  R at (1758, 917)" "  Y at (1535, 1661)" | digest)"
+      "$(printf '%s\n' "  AI at (1385, 255)" "  AM at (2348, 848)" "  AP at (456, 1896)" \
+         "  D at (643, 1606)" "  E at (940, 57)" "  J at (1778, 1673)" "  P at (274, 1903)" \
+         "  Q at (1545, 1660)" "  R at (2531, 107)" "  Y at (625, 1779)" | digest)"
 
 "$erd" > "$tmp/e1"
 "$erd" > "$tmp/e2"
@@ -136,9 +144,10 @@ set -e
 check "erd --svg exits 0"            "$rc" "0"
 check "and emits an svg"             "$(head -c 4 "$tmp/e.svg")" "<svg"
 check "with every table drawn three times" "$(grep -c '<rect' "$tmp/e.svg")" "136"
-check "carrying the pinned centroid score" "$(grep -c '251673' "$tmp/e.svg")" "1"
-check "the pinned search score"      "$(grep -c '130448' "$tmp/e.svg")" "1"
-check "and the pinned human score"   "$(grep -c '231877' "$tmp/e.svg")" "1"
+check "and every connector routed, three panels" "$(grep -c '<polyline' "$tmp/e.svg")" "177"
+check "carrying the pinned centroid score" "$(grep -c '207656' "$tmp/e.svg")" "1"
+check "the pinned search score"      "$(grep -c '58302.3' "$tmp/e.svg")" "1"
+check "and the pinned human score"   "$(grep -c '131154' "$tmp/e.svg")" "1"
 set +e
 out=$("$erd" junk 2>&1 >/dev/null); rc=$?
 set -e

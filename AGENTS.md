@@ -34,7 +34,7 @@ solved the 2001 problem was called a genetic algorithm and was in fact annealing
     make            # both examples
     make check      # ut + cliut -- the commit gate
     make ut         # unit suite, 60 checks: the library's contract, called as functions
-    make cliut      # black-box, 38 checks: the built examples through a shell
+    make cliut      # black-box, 41 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
@@ -90,13 +90,21 @@ out-draws a person.
 
 ## The objective
 
-Score by penetration, not by a count. An edge passing through a table is scored by the length of
-the segment inside the rectangle; a crossing count is flat under small moves, so the search has
-nothing to follow and walks at random on the plateau. Where a count is unavoidable, add a
-continuous nearness term beside it.
+Score by penetration, not by a count. A connector passing through a table is scored by the
+length of the overlap; a crossing count is flat under small moves, so the search has nothing to
+follow and walks at random on the plateau. Where a count is unavoidable, add a continuous
+nearness term beside it.
 
 Tier the weights by orders of magnitude rather than tuning them. In the ERD example: penetration
-and crossings at 100, edge length at 1, so length only ever breaks ties.
+and crossings at 100, connector length at 1, so length only ever breaks ties.
+
+Score the medium the reader sees. The ERD edges are routed orthogonally (L and Z shapes, the
+middle segment sliding across the channel) before anything is measured, because that is what
+the tool draws, and the router is calibrated against the one certain fact: the human's layout
+achieved 0 crossings and 0 penetration on screen. The run prints the router's shortfall (36
+and 422 at present), and no score comparison against the human means more than that line
+allows. Closing that gap, border anchors, more bends, routing aware of other routes, is the
+open problem the router owns.
 
 ## What is open, in the order to take it
 
@@ -128,11 +136,17 @@ and crossings at 100, edge length at 1, so length only ever breaks ties.
    learned from the one shipped pair: under this objective the searches beat the human, which
    means the objective is missing what the human optimizes. Treat the human score as a
    reference, not a target to beat.
-3. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
+3. **The router**, until it reproduces the human layout's 0 crossings and 0 penetration. The
+   current one (two bends, center anchors, routes blind to each other) measures 36 and 422 on
+   that layout, and the run prints the number so nobody mistakes the floor for the human's.
+   In rising order of cost: anchor connectors on the facing table borders instead of centers;
+   more bends; route edges sequentially so each sees the ones already placed; a grid router.
+   Every score comparison against the human sharpens exactly as fast as this number falls.
+4. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then
    interpolates between "nothing moves" and "full redraw". It also makes the search easier, by
    giving a rugged objective a basin around a known-good answer.
-4. **Benchmark against graphviz** before believing anything about full redraws. `neato` and `dot`
+5. **Benchmark against graphviz** before believing anything about full redraws. `neato` and `dot`
    are thirty years of graph drawing and are the control for that case, exactly as uniform sampling
    is the control here.
 
