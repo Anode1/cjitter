@@ -23,12 +23,12 @@ typedef struct {
 
 /* Seed the generator. Any seed is accepted; 0 is remapped (xorshift cannot
  * leave the zero state), so a 0 seed is reproducible, not degenerate. */
-void rng_seed(Rng *r, uint32_t seed);
+void cjitter_rng_seed(Rng *r, uint32_t seed);
 
 /* Next 32-bit value, advancing the state. */
-uint32_t rng_u32(Rng *r);
+uint32_t cjitter_rng_u32(Rng *r);
 
 /* Uniform real in [lo, hi). */
-double rng_uniform(Rng *r, double lo, double hi);
+double cjitter_rng_uniform(Rng *r, double lo, double hi);
 
 #endif /* CJITTER_RNG_H */

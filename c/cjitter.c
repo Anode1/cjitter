@@ -66,7 +66,7 @@ typedef struct {
     cjitter_tuning tun;
 } Run;
 
-static double uni(Rng *r) { return (double)rng_u32(r) / 4294967296.0; }
+static double uni(Rng *r) { return (double)cjitter_rng_u32(r) / 4294967296.0; }
 
 /* Sum of 12 uniforms, mean 6, variance 1: an approximate normal in pure arithmetic. A normal
  * step is what makes the move size mean something across dimensions of different width.
@@ -286,14 +286,19 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
     double jit;
     int rc = -1;
 
-    if (!method || !p || !b || !out || !p->fitness || p->n < 1 || b->evals < 1) return -1;
+    if (!p || !b || !out || !p->fitness || p->n < 1 || b->evals < 1) return -1;
     if (!p->lo || !p->hi) return -1;
     for (j = 0; j < p->n; j++)
         if (!(p->lo[j] <= p->hi[j])) return -1;   /* also refuses NaN bounds */
-    if (b->jitter < 0 || b->pop < 0) return -1;
+    if (!(b->jitter >= 0) || b->pop < 0) return -1;   /* also refuses NaN jitter */
+    /* NULL and "auto" both take the default method: the one the shipped benchmarks rank
+     * most budget-efficient, currently climb, tied to CJITTER_VERSION because changing it
+     * changes what a seed reproduces. */
+    if (!method || !strcmp(method, "auto")) method = "climb";
     for (mi = 0; cjitter_methods[mi] && strcmp(method, cjitter_methods[mi]); mi++)
         ;
     if (!cjitter_methods[mi]) return -1;
+    if (mi == 3 && b->pop == 1) return -1;   /* a population of one only re-scores a point */
 
     memset(&R, 0, sizeof R);
     R.tun = t ? *t : cjitter_tuning_default(p->n);
@@ -303,14 +308,17 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
     R.npop = b->pop > 0 ? b->pop : GA_POP_DEFAULT;
     if (R.npop > b->evals) R.npop = b->evals;
     jit = b->jitter > 0 ? b->jitter : 0.1;
-    rng_seed(&R.rng, b->seed ? b->seed : 1u);
+    cjitter_rng_seed(&R.rng, b->seed ? b->seed : 1u);
 
     R.x    = malloc((size_t)p->n * sizeof *R.x);
     R.cand = malloc((size_t)p->n * sizeof *R.cand);
     R.best = malloc((size_t)p->n * sizeof *R.best);
-    R.fit  = malloc((size_t)R.npop * sizeof *R.fit);
-    R.pop  = malloc((size_t)R.npop * (size_t)p->n * 2 * sizeof *R.pop);
-    if (!R.x || !R.cand || !R.best || !R.fit || !R.pop) goto done;
+    if (!R.x || !R.cand || !R.best) goto done;
+    if (mi == 3) {                       /* only the ga owns population scratch */
+        R.fit = malloc((size_t)R.npop * sizeof *R.fit);
+        R.pop = malloc((size_t)R.npop * (size_t)p->n * 2 * sizeof *R.pop);
+        if (!R.fit || !R.pop) goto done;
+    }
 
     switch (mi) {
     case 0: run_random(&R); break;
@@ -366,7 +374,10 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
     long m, s, nm = 0;
     int rc = -1;
 
-    if (!p || !b || seeds < 1) return -1;
+    /* The cap is two guards in one: past it the size arithmetic below can wrap, and past
+     * about a thousand the exact tests' doubles stop being exact. A thousand seeds is
+     * beyond any panel this comparison is for. */
+    if (!p || !b || seeds < 1 || seeds > 1000) return -1;
     while (cjitter_methods[nm]) nm++;
     sc = malloc((size_t)nm * (size_t)seeds * sizeof *sc);
     v  = malloc((size_t)seeds * sizeof *v);

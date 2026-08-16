@@ -1,7 +1,7 @@
 /* rng.c -- xorshift64* PRNG. See rng.h. Pure, no allocation. */
 #include "rng.h"
 
-void rng_seed(Rng *r, uint32_t seed)
+void cjitter_rng_seed(Rng *r, uint32_t seed)
 {
     /* xorshift cannot escape the all-zero state, so map 0 to a fixed nonzero
      * constant: a 0 seed stays reproducible instead of producing all zeros.
@@ -12,7 +12,7 @@ void rng_seed(Rng *r, uint32_t seed)
     if (!r->s) r->s = UINT64_C(0x9e3779b97f4a7c15);
 }
 
-uint32_t rng_u32(Rng *r)
+uint32_t cjitter_rng_u32(Rng *r)
 {
     uint64_t x = r->s;
     x ^= x >> 12;
@@ -22,9 +22,9 @@ uint32_t rng_u32(Rng *r)
     return (uint32_t)((x * UINT64_C(2685821657736338717)) >> 32);
 }
 
-double rng_uniform(Rng *r, double lo, double hi)
+double cjitter_rng_uniform(Rng *r, double lo, double hi)
 {
     /* Map the 32-bit word to [0,1) with the full 2^32 divisor, then scale. */
-    double u = (double)rng_u32(r) / 4294967296.0;
+    double u = (double)cjitter_rng_u32(r) / 4294967296.0;
     return lo + u * (hi - lo);
 }

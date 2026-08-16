@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: build
         run: make && test -x ./labels && test -x ./erd
+      - name: library and staged install
+        run: make lib && make install DESTDIR=$PWD/stage PREFIX=/usr && test -f stage/usr/lib/libcjitter.a && test -f stage/usr/include/cjitter.h
       - name: unit suite
         run: make ut
       - name: black-box suite

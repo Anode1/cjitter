@@ -76,13 +76,13 @@ int main(void)
     {
         Rng g, h, z;
         double u;
-        rng_seed(&g, 42);
-        rng_seed(&h, 42);
-        CHECK(rng_u32(&g) == rng_u32(&h), "rng: same seed gives the same sequence");
-        u = rng_uniform(&g, -1.0, 1.0);
+        cjitter_rng_seed(&g, 42);
+        cjitter_rng_seed(&h, 42);
+        CHECK(cjitter_rng_u32(&g) == cjitter_rng_u32(&h), "rng: same seed gives the same sequence");
+        u = cjitter_rng_uniform(&g, -1.0, 1.0);
         CHECK(u >= -1.0 && u < 1.0, "rng: uniform stays in [lo, hi)");
-        rng_seed(&z, 0);
-        CHECK(rng_u32(&z) != 0, "rng: seed 0 is remapped, not degenerate");
+        cjitter_rng_seed(&z, 0);
+        CHECK(cjitter_rng_u32(&z) != 0, "rng: seed 0 is remapped, not degenerate");
     }
 
     /* The method list is the interface's own order, NULL-terminated after the four. */
@@ -103,7 +103,7 @@ int main(void)
         cjitter_problem bad;
         cjitter_budget bb;
 
-        CHECK(cjitter_run(NULL, &p, &b, &r) == -1, "run refuses a NULL method");
+        CHECK(cjitter_run("", &p, &b, &r) == -1, "run refuses an empty method name");
         CHECK(cjitter_run("climb", NULL, &b, &r) == -1, "run refuses a NULL problem");
         CHECK(cjitter_run("climb", &p, NULL, &r) == -1, "run refuses a NULL budget");
         CHECK(cjitter_run("climb", &p, &b, NULL) == -1, "run refuses a NULL result");
@@ -242,6 +242,35 @@ int main(void)
             CHECK(wrote == 0,
                   "tuning: compare refuses a bad one before printing anything");
         }
+    }
+
+    /* NULL and "auto" are the default method, bit for bit the current climb; the alias is
+     * an interface, so it gets its own checks. And the new refusals: a seed panel past
+     * 1000 (the exact tests' arithmetic stops being exact), NaN jitter (it silently became
+     * the 0.1 default), and a ga population of one (the whole budget re-scores a point). */
+    {
+        Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_budget b = { 200, 11, 0.1, 0 };
+        cjitter_budget bb;
+        double x[2], y[2], z2[2];
+        cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
+        cjitter_result r3 = { 0, z2, 0, 0, NULL };
+        CHECK(cjitter_run("climb", &p, &b, &r) == 0 &&
+              cjitter_run("auto", &p, &b, &r2) == 0 &&
+              cjitter_run(NULL, &p, &b, &r3) == 0 &&
+              r.best == r2.best && r.best == r3.best &&
+              memcmp(x, y, sizeof x) == 0 && memcmp(x, z2, sizeof x) == 0 &&
+              strcmp(r2.method, "climb") == 0,
+              "auto and NULL are the default method, bit for bit the current climb");
+        CHECK(cjitter_compare(&p, &b, 1001, NULL) == -1,
+              "compare refuses a seed panel past 1000");
+        bb = b; bb.jitter = 0.0 / 0.0;
+        CHECK(cjitter_run("climb", &p, &bb, &r) == -1, "run refuses a NaN jitter");
+        bb = b; bb.pop = 1;
+        CHECK(cjitter_run("ga", &p, &bb, &r) == -1, "run refuses a ga population of one");
+        CHECK(cjitter_run("climb", &p, &bb, &r) == 0,
+              "and pop 1 is no refusal for a method that has no population");
     }
 
     /* Seed 0 is remapped inside run as it is in rng, so it works and reproduces. */

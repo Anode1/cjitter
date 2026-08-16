@@ -20,6 +20,7 @@ SRC     = c/cjitter.c c/rng.c
 OBJ     = $(SRC:.c=.o)
 
 PREFIX ?= /usr/local
+AR     ?= ar
 
 .PHONY: all lib check ut cliut ut-asan ut-ubsan pedantic examples install uninstall clean
 
@@ -31,7 +32,7 @@ check: ut cliut
 # cjitter.h includes nothing beyond stddef and stdint.
 lib: libcjitter.a
 libcjitter.a: $(OBJ)
-	ar rcs $@ $(OBJ)
+	$(AR) rcs $@ $(OBJ)
 
 install: libcjitter.a
 	install -d $(DESTDIR)$(PREFIX)/lib $(DESTDIR)$(PREFIX)/include
@@ -95,7 +96,7 @@ ut-ubsan: $(HEADERS)
 # target only enforced its claim on whoever read the scrollback.
 pedantic: $(HEADERS)
 	@rc=0; tmp=`mktemp -d`; \
-	for f in $(SRC) tests/tests.c example/labels.c example/erd/erd.c; do \
+	for f in $(SRC) tests/tests.c example/labels.c example/erd/erd.c example/erd/erd_movie.c; do \
 	    $(CC) $(PROJ) -pedantic -Wextra -Werror -O2 -c "$$f" -o "$$tmp/p.o" || rc=1; \
 	done; \
 	rm -rf "$$tmp"; \

@@ -131,8 +131,8 @@ score means only as much as its calibration line, and the run prints both:
 
     ---- straight diagonal edges ----
 
-    centroid         226609   (place each new table at its neighbours' centroid)
-    human            218207   (where the human actually put them)
+    centroid         226609   (the centroid rule: each new table at its neighbours' centroid)
+    human            218207   (the human placement, where the maintainer put them)
                20 crossings, 1943.96 penetration under this edge model
 
     method         median        range    wins    sign-p   vs random
@@ -143,8 +143,8 @@ score means only as much as its calibration line, and the run prints both:
 
     ---- orthogonal routed connectors ----
 
-    centroid         194470   (place each new table at its neighbours' centroid)
-    human            157552   (where the human actually put them)
+    centroid         194470   (the centroid rule: each new table at its neighbours' centroid)
+    human            157552   (the human placement, where the maintainer put them)
                27 crossings, 323 penetration under this edge model
 
     method         median        range    wins    sign-p   vs random

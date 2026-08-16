@@ -623,10 +623,10 @@ int main(int argc, char **argv)
         g.konst = frozen_part(&g);
         /* the scrambled state: every table where a reverse-engineering drops it */
         gs = g;
-        rng_seed(&sr, 42);
+        cjitter_rng_seed(&sr, 42);
         for (i = 0; i < gs.n; i++) {
-            double px = gs.w[i] / 2 + rng_uniform(&sr, 0, gs.cw - gs.w[i]);
-            double py = gs.h[i] / 2 + rng_uniform(&sr, 0, gs.ch - gs.h[i]);
+            double px = gs.w[i] / 2 + cjitter_rng_uniform(&sr, 0, gs.cw - gs.w[i]);
+            double py = gs.h[i] / 2 + cjitter_rng_uniform(&sr, 0, gs.ch - gs.h[i]);
             if (i < gs.nfixed) { gs.x[i] = px; gs.y[i] = py; }
             else { xs[2*(i - gs.nfixed)] = px; xs[2*(i - gs.nfixed) + 1] = py; }
         }
@@ -662,9 +662,9 @@ int main(int argc, char **argv)
                                            : "orthogonal routed connectors");
         centroid_place(&g, x);
         legal(x, &g);
-        printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n",
+        printf("%-10s %12.6g   (the centroid rule: each new table at its neighbours' centroid)\n",
                "centroid", score(x, &g));
-        printf("%-10s %12.6g   (where the human actually put them)\n",
+        printf("%-10s %12.6g   (the human placement, where the maintainer put them)\n",
                "human", score(xh, &g));
         /* The edge model's calibration, against the one certain fact about the human's
          * layout: it achieved no crossings and no edge under a table on screen. What the

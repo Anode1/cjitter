@@ -33,6 +33,9 @@
 /* The library's version, bumped only when the interface or a method's trajectory changes:
  * either one changes what a seed reproduces. */
 #define CJITTER_VERSION "0.9.0"
+#define CJITTER_VERSION_MAJOR 0
+#define CJITTER_VERSION_MINOR 9
+#define CJITTER_VERSION_PATCH 0
 
 /* Lower is better. CTX is yours, untouched. */
 typedef double (*cjitter_fitness)(const double *x, void *ctx);
@@ -89,12 +92,15 @@ typedef struct {
     double     *x;       /* the point, n values, owned by the caller */
     long        evals;   /* actually spent */
     long        restarts;
-    const char *method;
+    const char *method;  /* points into cjitter_methods: static storage, never freed */
 } cjitter_result;
 
-/* METHOD is "random", "climb", "anneal" or "ga". OUT->x must have room for n doubles.
- * Returns 0, or -1 on a bad argument or an allocation failure. cjitter_run takes the default
- * tuning; the _tuned variant takes an explicit one, where NULL means the same defaults. */
+/* METHOD is "random", "climb", "anneal" or "ga"; NULL or "auto" takes the default, the
+ * method the shipped benchmarks rank most budget-efficient (currently climb), tied to
+ * CJITTER_VERSION because changing it changes what a seed reproduces. OUT->x must have room
+ * for n doubles. Returns 0, or -1 on a bad argument or an allocation failure. cjitter_run
+ * takes the default tuning; the _tuned variant takes an explicit one, where NULL means the
+ * same defaults. */
 int cjitter_run(const char *method, const cjitter_problem *p, const cjitter_budget *b,
                 cjitter_result *out);
 int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitter_budget *b,
@@ -103,7 +109,8 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
 /* All four, SEEDS times each, at one budget, every method on the same seed panel derived
  * from b->seed, so the per-seed differences are paired. Prints the table described at the
  * top of this file to STREAM (a FILE*; NULL means stdout). Returns 0, or -1 on a bad
- * argument or an allocation failure, before anything is printed. */
+ * argument or an allocation failure, before anything is printed. SEEDS is at most 1000:
+ * past that the exact tests' arithmetic stops being exact. */
 int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, void *stream);
 int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
                           const cjitter_tuning *t, long seeds, void *stream);

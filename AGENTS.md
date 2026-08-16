@@ -42,7 +42,7 @@ plus noise is jitter, which is why the name fits the whole family.
     make            # both examples
     make lib        # libcjitter.a; install/uninstall honor PREFIX (default /usr/local)
     make check      # ut + cliut -- the commit gate
-    make ut         # unit suite, 60 checks: the library's contract, called as functions
+    make ut         # unit suite, 65 checks: the library's contract, called as functions
     make cliut      # black-box, 48 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
