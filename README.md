@@ -2,8 +2,28 @@
 
 ### It warns when a search does no better than uniform random sampling at the same budget
 
-You supply a fitness function over a box of real variables, lower being better, and a budget in
-evaluations. Four methods spend that budget:
+You supply a fitness function over a box of real variables, lower being better, a budget in
+evaluations, and, for hard constraints, a repair callback that moves a proposal into
+feasibility before it is scored. One call optimizes it:
+
+    cjitter_problem p = { n, lo, hi, my_fitness, my_repair, ctx };
+    cjitter_budget  b = { 8000, 1, 0.1, 0 };   /* evals, seed, first move size, pop */
+    cjitter_result  r = { 0, best, 0, 0, 0 };  /* best: your array of n doubles */
+    cjitter_run("climb", &p, &b, &r);
+
+No dependencies beyond libm. Deterministic from a seed on every platform. `make lib` builds
+`libcjitter.a`; `make install` puts it and the one header under PREFIX.
+
+The fit is any problem whose objective is cheap enough to call thousands of times over tens
+to a few hundred variables, with no gradient on offer: placement and packing of rectangles
+and points, calibration of small branchy models, constants inside programs tuned against a
+fast benchmark, permutations through random keys (ordering, assignment, small routing),
+falsification searches over a program's input box, allocation weights that a repair
+normalizes, inverse design with a cheap evaluator. Where it does not fit: objectives costing
+minutes (those want surrogate models), losses with usable gradients, dimensions in the
+thousands.
+
+Four methods spend the budget, and the comparison between them is the library's second half:
 
     random    draw uniformly from the box. The control.
     climb     jitter a neighbour, keep it if better, restart when stuck.
@@ -14,11 +34,10 @@ evaluations. Four methods spend that budget:
     ./labels          # 90 rectangles in a container, minimise overlap
     ./erd             # place new tables on an existing diagram
 
-No dependencies beyond libm. Deterministic from a seed on every platform. The methods'
-internal constants (patience, cooling, mutation) come from `cjitter_tuning_default`; change
-the fields you mean to change and pass the struct to `cjitter_run_tuned` or
-`cjitter_compare_tuned`. Every field is read literally, so `ga_mutate = 0` is a real
-mutation ablation.
+The methods' internal constants (patience, cooling, mutation) come from
+`cjitter_tuning_default`; change the fields you mean to change and pass the struct to
+`cjitter_run_tuned` or `cjitter_compare_tuned`. Every field is read literally, so
+`ga_mutate = 0` is a real mutation ablation.
 
 ## The control
 
