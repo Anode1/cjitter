@@ -1,6 +1,7 @@
 c/*.o
 /labels
 /erd
+/sixty
 /cjitter_ut
 /cjitter_ut_asan
 /cjitter_ut_ubsan

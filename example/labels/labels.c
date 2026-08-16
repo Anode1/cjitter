@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "../c/cjitter.h"
+#include "../../c/cjitter.h"
 
 /* The example's constants: the geometry, the shipped budget, and the defaults the three
  * arguments fall back to. The README's labels table is a function of these. */

@@ -72,7 +72,7 @@ library working as intended.
 
 ## The examples
 
-**`example/labels.c`** places rectangles in a container with minimum overlap. This is the
+**`example/labels/`** places rectangles in a container with minimum overlap. This is the
 problem the author solved for industry in 2001, deployed: label placement in a bounded area,
 no edges between them, nothing allowed to intersect. Cheap, exact, deterministic objective;
 staying inside the container is a hard constraint in the repair callback, and `cjitter.h`
