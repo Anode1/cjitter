@@ -15,9 +15,10 @@ Workbench does badly and which costs about an hour by hand on a 44-table schema.
 The name is jitter, the regulariser from the author's 1997 thesis and the mechanism that made the
 2001 layout settle. It names what all four methods share, which is why it does not name one of
 them: an earlier working title, `gaop`, would have baked in a misattribution, because what
-solved the 2001 problem was called a genetic algorithm and was in fact per-label hill
-climbing under the one summed cost, each label retracting from its neighbours in turn until
-nothing overlapped.
+solved the 2001 problem was called a genetic algorithm and was in fact per-label descent
+under the one summed cost: each label nudged a pixel at a time in the direction of least
+intersection with its neighbours, with a little noise on the step, until nothing overlapped.
+Descent plus noise is jitter, which is why the name fits the whole family.
 
 ## The contract (read first)
 
