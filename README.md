@@ -50,15 +50,9 @@ library working as intended.
 problem the author solved for industry in 2001, deployed: label placement in a bounded area,
 no edges between them, nothing allowed to intersect. Cheap, exact, deterministic objective;
 staying inside the container is a hard constraint in the repair callback, and `cjitter.h`
-says why that is not a penalty term.
-
-![Annealing settling 90 labels, one frame per 250 evaluations](example/labels_anneal.gif)
-
-The moving figure is the 2001 debugging view recreated, the double-buffered applet canvas
-that made the method legible then: labels retracting from their neighbours until the space
-fills and nothing overlaps, an overlap drawn as the darker patch, one frame per improvement.
-The 2001 placer moved one label at a time; the film follows the GA, the method here that
-ends clean the way that one did. `make movie` rebuilds it.
+says why that is not a penalty term. The 2001 system solved it with per-label random unit
+steps kept when the summed overlap fell, a (1+1) strategy per label, and settled to zero
+overlap in seconds whenever the labels fit at all.
 
 **`example/erd/`** is the application this was written for. Laying out a diagram with the
 fewest edge crossings is NP-complete (Garey and Johnson, *Crossing Number is NP-Complete*,
@@ -74,6 +68,13 @@ last migration added ten tables. The observation
 that makes the problem tractable: only those ten need placing. Freezing the rest is no
 compromise, since a reader who knows where a table sits should still find it there, and it
 turns 88 free variables into 20.
+
+The search itself is worth watching. The film is a smoothed replay of climb's improvements
+at the shipped budget and seed: the frozen diagram stands still, the migration's ten tables
+glide from the first random draw into the pinned layout, and the connectors re-route at
+every frame. `make movie` rebuilds it.
+
+![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
 
 Both revisions are in the repository, drawn by `data/render.py` from the extracted geometry.
 Neither image is a Workbench export; an export would carry the real names. The diagram before

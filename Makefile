@@ -29,17 +29,18 @@ c/%.o: c/%.c $(HEADERS)
 
 examples: labels erd
 
-# The animated view of annealing settling the labels, the README's moving figure. Not part
-# of check: it needs rsvg-convert and ImageMagick, and its output is a committed fixture.
-movie: example/labels_movie.c example/labels.c $(OBJ) $(HEADERS)
-	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o labels_movie example/labels_movie.c $(OBJ) $(LIBM) $(LDLIBS)
+# The search watched: climb settling the migration's tables into the frozen diagram, a
+# smoothed replay of its improvements. The README's moving figure. Not part of check: it
+# needs rsvg-convert and ImageMagick, and its output is a committed fixture.
+movie: example/erd/erd_movie.c example/erd/erd.c $(OBJ) $(HEADERS)
+	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o erd_movie example/erd/erd_movie.c $(OBJ) $(LIBM) $(LDLIBS)
 	rm -rf movie_frames && mkdir movie_frames
-	./labels_movie movie_frames
-	for f in movie_frames/frame*.svg; do rsvg-convert -w 500 "$$f" -o "$${f%.svg}.png"; done
-	convert -delay 10 -loop 0 movie_frames/frame*.png \
-	        \( +clone -set delay 300 \) +swap +delete example/labels_anneal.gif
-	rm -rf movie_frames labels_movie
-	@echo "example/labels_anneal.gif rebuilt"
+	./erd_movie movie_frames
+	for f in movie_frames/frame*.svg; do rsvg-convert -w 640 "$$f" -o "$${f%.svg}.png"; done
+	convert -delay 5 -loop 0 movie_frames/frame*.png \
+	        \( +clone -set delay 400 \) +swap +delete -layers Optimize example/erd/erd_settle.gif
+	rm -rf movie_frames erd_movie
+	@echo "example/erd/erd_settle.gif rebuilt"
 
 labels: example/labels.c $(OBJ) $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ example/labels.c $(OBJ) $(LIBM) $(LDLIBS)
