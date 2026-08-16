@@ -503,7 +503,7 @@ static void svg_out(const Erd *g, const Erd *gs, const double *xs,
     long j;
     ge[0] = gs; ge[1] = g; ge[2] = g; ge[3] = g;
     v[0] = xs; v[1] = xc; v[2] = xb; v[3] = xh;
-    title[0] = "scrambled: as a reverse-engineering leaves the diagram";
+    title[0] = "scrambled: the kept positions are gone after a reverse-engineering";
     snprintf(t1, sizeof t1, "initial: neighbours&#8217; centroid, score %.6g", sc);
     snprintf(t2, sizeof t2, "final: %s at seed 1, score %.6g", method, sb);
     snprintf(t3, sizeof t3, "reference: the human&#8217;s accepted layout, score %.6g", sh);
