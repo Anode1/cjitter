@@ -162,6 +162,7 @@ Node overlap and canvas bounds are hard constraints in the repair callback, for 
 ## Build and test
 
     make            build both examples
+    make lib        libcjitter.a; make install puts it and cjitter.h under PREFIX
     make check      ut + cliut -- the commit gate
     make ut         unit suite: refusals, the exact budget, determinism, box and repair
     make cliut      black-box: the built examples through a shell, exit codes and reproducibility

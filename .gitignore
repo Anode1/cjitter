@@ -12,3 +12,4 @@ c/*.o
 /erd.svg
 /erd_movie
 movie_frames/
+/libcjitter.a

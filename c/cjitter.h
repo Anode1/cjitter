@@ -30,6 +30,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* The library's version, bumped only when the interface or a method's trajectory changes:
+ * either one changes what a seed reproduces. */
+#define CJITTER_VERSION "0.9.0"
+
 /* Lower is better. CTX is yours, untouched. */
 typedef double (*cjitter_fitness)(const double *x, void *ctx);
 

@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
 #
-#   make | check | ut | cliut | ut-asan | ut-ubsan | pedantic | examples | clean
+#   make | lib | check | ut | cliut | ut-asan | ut-ubsan | pedantic | examples
+#   make install [PREFIX=/usr/local] | uninstall | clean
 SHELL = /bin/sh
 
 CC       ?= cc
@@ -18,11 +19,27 @@ HEADERS = $(wildcard c/*.h)
 SRC     = c/cjitter.c c/rng.c
 OBJ     = $(SRC:.c=.o)
 
-.PHONY: all check ut cliut ut-asan ut-ubsan pedantic examples clean
+PREFIX ?= /usr/local
+
+.PHONY: all lib check ut cliut ut-asan ut-ubsan pedantic examples install uninstall clean
 
 all: examples
 
 check: ut cliut
+
+# The library artifact: the two objects and the one public header. rng.h stays internal;
+# cjitter.h includes nothing beyond stddef and stdint.
+lib: libcjitter.a
+libcjitter.a: $(OBJ)
+	ar rcs $@ $(OBJ)
+
+install: libcjitter.a
+	install -d $(DESTDIR)$(PREFIX)/lib $(DESTDIR)$(PREFIX)/include
+	install -m 644 libcjitter.a $(DESTDIR)$(PREFIX)/lib/
+	install -m 644 c/cjitter.h $(DESTDIR)$(PREFIX)/include/
+
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/lib/libcjitter.a $(DESTDIR)$(PREFIX)/include/cjitter.h
 
 c/%.o: c/%.c $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -85,5 +102,5 @@ pedantic: $(HEADERS)
 	test $$rc -eq 0 && echo "pedantic: clean"; exit $$rc
 
 clean:
-	rm -f c/*.o labels erd cjitter_ut cjitter_ut_asan cjitter_ut_ubsan \
+	rm -f c/*.o libcjitter.a labels erd cjitter_ut cjitter_ut_asan cjitter_ut_ubsan \
 	      labels_asan erd_asan labels_ubsan erd_ubsan
