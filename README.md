@@ -15,13 +15,20 @@ No dependencies beyond libm. Deterministic from a seed on every platform. `make 
 `libcjitter.a`; `make install` puts it and the one header under PREFIX.
 
 The fit is any problem whose objective is cheap enough to call thousands of times over tens
-to a few hundred variables, with no gradient on offer: placement and packing of rectangles
-and points, calibration of small branchy models, constants inside programs tuned against a
-fast benchmark, permutations through random keys (ordering, assignment, small routing),
-falsification searches over a program's input box, allocation weights that a repair
-normalizes, inverse design with a cheap evaluator. Where it does not fit: objectives costing
-minutes (those want surrogate models), losses with usable gradients, dimensions in the
-thousands.
+to a few hundred variables, with no gradient on offer:
+
+    placement and packing        labels, diagrams, floor plans, sensors, nesting
+    calibration, inverse design  small branchy models, controller gains, cheap evaluators
+    constants inside programs    thresholds and knobs tuned against a fast benchmark,
+                                 hyperparameters of quick-to-train models
+    permutations by random keys  ordering, assignment, small routing
+    falsification                searching a program's input box for the distance to failure
+    allocation under a repair    portfolio and budget weights the repair normalizes
+    black-box fitting            game evaluation weights against an opponent suite,
+                                 simulation likelihoods
+
+Where it does not fit: objectives costing minutes (those want surrogate models), losses with
+usable gradients, dimensions in the thousands.
 
 Four methods spend the budget, and the comparison between them is the library's second half:
 
