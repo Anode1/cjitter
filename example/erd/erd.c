@@ -65,6 +65,9 @@ typedef struct {
     double w[MAXN], h[MAXN];
     long   e[MAXE][2];
     int    enew[MAXE];             /* does edge a touch a new table? decided once */
+    int    straight;               /* the one style boolean: straight diagonal edges, the
+                                      representation diagonal-edge tools draw, instead of
+                                      routed orthogonal connectors */
     double konst;                  /* every term among frozen tables only, summed once */
     Route  rt[MAXE];               /* frozen routes fixed once; new-touching rerouted per score */
     double cw, ch;
@@ -162,10 +165,27 @@ static double route_edge(const Erd *g, const double *v, long a, long ntab, Route
     static const double T[7] = { -0.25, 0.15, 0.3, 0.5, 0.7, 0.85, 1.25 };
     double ax, ay, bx, by, bestcost = 0, bestpen = 0;
     long e0 = g->e[a][0], e1 = g->e[a][1];
-    int c, have = 0;
+    int c, have = 0, nc = g->straight ? 1 : 16;
     pos(g, v, e0, &ax, &ay);
     pos(g, v, e1, &bx, &by);
-    for (c = 0; c < 16; c++) {
+    if (g->straight) {
+        /* the diagonal representation: one candidate, the direct segment */
+        Route cand;
+        double pen = 0;
+        long i;
+        cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = bx; cand.py[1] = by;
+        cand.np = 2;
+        cand.minx = ax < bx ? ax : bx; cand.maxx = ax < bx ? bx : ax;
+        cand.miny = ay < by ? ay : by; cand.maxy = ay < by ? by : ay;
+        for (i = 0; i < ntab; i++) {
+            if (i == e0 || i == e1) continue;
+            pen += through(g, v, i, ax, ay, bx, by);
+        }
+        *r = cand;
+        if (pen_out) *pen_out = pen;
+        return W_TIER * pen + seglen(bx - ax, by - ay);
+    }
+    for (c = 0; c < nc; c++) {
         Route cand;
         double cost, pen = 0, len = 0;
         long i;
@@ -442,6 +462,7 @@ int main(int argc, char **argv)
     cjitter_result r;
     double lo[64], hi[64], x[64], xh[64];
     long i, k, nnew, nv;
+    int style;
     int want_svg = argc == 2 && !strcmp(argv[1], "--svg");
 
     if (argc > 1 && !want_svg) {
@@ -498,45 +519,50 @@ int main(int argc, char **argv)
     printf("%ld tables already placed, %ld added by a migration, %ld foreign keys.\n",
            g.nfixed, nnew, g.ne);
     printf("A real schema, anonymized; see data/PROVENANCE.md. Only the new tables move.\n"
-           "Edges are routed orthogonally, as the tool draws them. Objective: routed\n"
-           "penetration and crossings at 100, routed length at 1. Lower is better.\n\n");
+           "The same experiment runs twice: first with straight diagonal edges, the\n"
+           "representation diagonal-edge tools draw, then with orthogonal routed\n"
+           "connectors, what the reader actually sees. Objective in both: penetration\n"
+           "and crossings at 100, length at 1. Lower is better.\n");
 
-    centroid_place(&g, x);
-    legal(x, &g);
-    printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n",
-           "centroid", score(x, &g));
-    printf("%-10s %12.6g   (where the human actually put them)\n",
-           "human", score(xh, &g));
-    /* The router's calibration, against the one certain fact about the human's layout: it
-     * achieved no crossings and no edge under a table. What the router reproduces of that is
-     * the router's quality, and every score above is only as meaningful as this line. */
-    {
+    /* The one style boolean, both ways: the two sections differ in nothing but it. */
+    for (style = 1; style >= 0; style--) {
         static Route rt[MAXE];
         double pen;
         long nc;
+        g.straight = style;
+        g.konst = frozen_part(&g);
+        printf("\n---- %s ----\n\n", style ? "straight diagonal edges"
+                                           : "orthogonal routed connectors");
+        centroid_place(&g, x);
+        legal(x, &g);
+        printf("%-10s %12.6g   (place each new table at its neighbours' centroid)\n",
+               "centroid", score(x, &g));
+        printf("%-10s %12.6g   (where the human actually put them)\n",
+               "human", score(xh, &g));
+        /* The edge model's calibration, against the one certain fact about the human's
+         * layout: it achieved no crossings and no edge under a table on screen. What the
+         * model reproduces of that is the model's quality, and every score in this section
+         * is only as meaningful as this line. */
         layout_report(&g, xh, rt, &nc, &pen);
-        printf("%-10s %ld crossings, %.6g penetration when fully routed (the hand layout\n"
-               "%-10s achieved 0 and 0; the shortfall is the router's, not the human's)\n\n",
-               "", nc, pen, "");
-    }
+        printf("%-10s %ld crossings, %.6g penetration under this edge model (the hand\n"
+               "%-10s layout achieved 0 and 0; the shortfall is the model's, not the\n"
+               "%-10s human's)\n\n", "", nc, pen, "", "");
 
-    if (cjitter_compare(&p, &b, SEEDS, stdout) != 0) {
-        fprintf(stderr, "erd: comparison failed\n");
-        return 1;
-    }
+        if (cjitter_compare(&p, &b, SEEDS, stdout) != 0) {
+            fprintf(stderr, "erd: comparison failed\n");
+            return 1;
+        }
 
-    r.x = x;
-    if (cjitter_run("climb", &p, &b, &r) == 0) {
-        static Route rt[MAXE];
-        double pen;
-        long nc;
-        /* One run at seed 1, the run --svg draws. Its score sits somewhere in the table's
-         * per-seed spread. */
-        printf("\nthe layout %s found at seed 1, score %.6g:\n", r.method, r.best);
-        for (k = 0; k < nnew; k++)
-            printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
-        layout_report(&g, x, rt, &nc, &pen);
-        printf("fully routed: %ld crossings, %.6g penetration\n", nc, pen);
+        r.x = x;
+        if (cjitter_run("climb", &p, &b, &r) == 0) {
+            /* One run at seed 1, the run --svg draws (routed style). Its score sits
+             * somewhere in the table's per-seed spread. */
+            printf("\nthe layout %s found at seed 1, score %.6g:\n", r.method, r.best);
+            for (k = 0; k < nnew; k++)
+                printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
+            layout_report(&g, x, rt, &nc, &pen);
+            printf("under this edge model: %ld crossings, %.6g penetration\n", nc, pen);
+        }
     }
     return 0;
 }

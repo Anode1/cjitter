@@ -34,7 +34,7 @@ solved the 2001 problem was called a genetic algorithm and was in fact annealing
     make            # both examples
     make check      # ut + cliut -- the commit gate
     make ut         # unit suite, 60 checks: the library's contract, called as functions
-    make cliut      # black-box, 41 checks: the built examples through a shell
+    make cliut      # black-box, 45 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
@@ -63,7 +63,8 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
                     command-line argument could reach; its bpnn ancestor once understated a
                     study's standard error by 2.5x the same way.
     example/labels.c    rectangles in a container, minimum overlap
-    example/erd/erd.c   tables added by a migration onto a frozen diagram; --svg draws it
+    example/erd/erd.c   tables added by a migration onto a frozen diagram, the experiment
+                        run under both edge models (one style boolean); --svg draws it
     example/erd/data/   the real schema, anonymized: ERD.mwb, both revisions as PNG, the
                         geometry as JSON, and PROVENANCE.md for what the anonymization changed
     tests/tests.c       unit suite: refusals, the exact budget, determinism, box and repair

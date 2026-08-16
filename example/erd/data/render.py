@@ -5,8 +5,13 @@ route_edge (two L shapes, Z shapes sliding across the channel, least penetration
 breaks ties, earlier shape wins exact ties), so the pictures show orthogonal connectors, the
 medium the objective scores, and never a diagonal.
 
+ERD_straight is the same current revision with straight center-to-center edges, the
+general-graph representation that diagonal-edge tools draw; the pair of pictures is the
+argument for routing, so both are kept.
+
     python3 render.py && rsvg-convert -w 1800 ERD_anon.svg -o ERD.png \
-                      && rsvg-convert -w 1800 ERD_prev_anon.svg -o ERD_prev.png
+                      && rsvg-convert -w 1800 ERD_prev_anon.svg -o ERD_prev.png \
+                      && rsvg-convert -w 1800 ERD_straight_anon.svg -o ERD_straight.png
 """
 import json
 
@@ -60,7 +65,7 @@ def route(a, b, figs, cx):
     return best
 
 
-def render(rev, path, mark_added):
+def render(rev, path, mark_added, straight=False):
     figs, edges = rev['figs'], rev['edges']
     W = max(f[0] + f[2] for f in figs.values()) + 40
     H = max(f[1] + f[3] for f in figs.values()) + 40
@@ -70,7 +75,7 @@ def render(rev, path, mark_added):
            "<rect width='%g' height='%g' fill='#fafafa'/>" % (W, H)]
     for a, b in edges:
         nu = mark_added and (a in added or b in added)
-        pts = route(a, b, figs, cx)
+        pts = [cx[a], cx[b]] if straight else route(a, b, figs, cx)
         out.append("<polyline points='%s' fill='none' stroke='%s' stroke-width='2'/>"
                    % (' '.join('%g,%g' % p for p in pts), '#c60' if nu else '#999'))
     for n, f in figs.items():
@@ -89,3 +94,4 @@ def render(rev, path, mark_added):
 
 render(g['cur'], 'ERD_anon.svg', True)
 render(g['prev'], 'ERD_prev_anon.svg', False)
+render(g['cur'], 'ERD_straight_anon.svg', True, straight=True)

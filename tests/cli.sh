@@ -87,25 +87,32 @@ out=$("$erd"); rc=$?
 set -e
 check "erd runs"                     "$rc" "0"
 check "erd states the problem"       "$(printf '%s' "$out" | grep -c 'added by a migration')" "1"
-check "erd scores the centroid heuristic" \
-      "$(printf '%s' "$out" | grep -c '^centroid ')" "1"
-check "erd scores the human's layout" \
-      "$(printf '%s' "$out" | grep -c '^human ')" "1"
+check "erd scores the centroid heuristic in both styles" \
+      "$(printf '%s' "$out" | grep -c '^centroid ')" "2"
+check "erd scores the human's layout in both styles" \
+      "$(printf '%s' "$out" | grep -c '^human ')" "2"
 # The router's calibration against the one certain fact: the hand layout achieved 0 crossings
 # and 0 penetration. The printed shortfall is the router's floor and every score's caveat.
-check "erd prints the router calibration" \
-      "$(printf '%s' "$out" | grep 'penetration when fully routed')" \
-      "           36 crossings, 422 penetration when fully routed (the hand layout"
-check "erd routes the returned layout too" \
-      "$(printf '%s' "$out" | grep 'fully routed:')" \
-      "fully routed: 63 crossings, 0 penetration"
-check "erd prints the table header"  "$(printf '%s' "$out" | grep -c 'vs random')" "1"
-check "erd reports all four methods" \
-      "$(printf '%s' "$out" | grep -cE '^(random|climb|anneal|ga) ')" "4"
-check "erd prints the seed-1 layout" \
-      "$(printf '%s' "$out" | grep -c 'the layout climb found at seed 1')" "1"
-check "erd places every migration table" \
-      "$(printf '%s' "$out" | grep -c ' at (')" "10"
+check "erd calibrates both edge models against the hand layout" \
+      "$(printf '%s' "$out" | grep -c 'under this edge model (the hand')" "2"
+check "the straight model's calibration is pinned" \
+      "$(printf '%s' "$out" | grep '1943.96 penetration')" \
+      "           29 crossings, 1943.96 penetration under this edge model (the hand"
+check "the routed model's calibration is pinned" \
+      "$(printf '%s' "$out" | grep '422 penetration')" \
+      "           36 crossings, 422 penetration under this edge model (the hand"
+check "both returned layouts report their feasibility" \
+      "$(printf '%s' "$out" | grep -c '^under this edge model:')" "2"
+check "the routed layout's feasibility is pinned" \
+      "$(printf '%s' "$out" | grep '63 crossings')" \
+      "under this edge model: 63 crossings, 0 penetration"
+check "erd prints both table headers" "$(printf '%s' "$out" | grep -c 'vs random')" "2"
+check "erd reports all four methods twice" \
+      "$(printf '%s' "$out" | grep -cE '^(random|climb|anneal|ga) ')" "8"
+check "erd prints a seed-1 layout per style" \
+      "$(printf '%s' "$out" | grep -c 'the layout climb found at seed 1')" "2"
+check "erd places every migration table, both styles" \
+      "$(printf '%s' "$out" | grep -c ' at (')" "20"
 # The repair's canvas bound, checked on what the run actually returned. The overlap push-out
 # once shoved tables past the clamp, and an infeasible layout was returned as best. The sign
 # is part of the pattern deliberately: an earlier version matched only [0-9]*, so the exact
@@ -113,21 +120,27 @@ check "erd places every migration table" \
 check "every placed table is on the canvas" \
       "$(printf '%s' "$out" | sed -n 's/.*at (\(-\{0,1\}[0-9][0-9]*\), \(-\{0,1\}[0-9][0-9]*\)).*/\1 \2/p' | \
          awk '$1<0||$1>2949||$2<0||$2>1966{bad++} END{print bad+0}')" "0"
-check "and the pattern loses none of the ten lines" \
-      "$(printf '%s\n' "$out" | sed -n 's/.*at (\(-\{0,1\}[0-9][0-9]*\), \(-\{0,1\}[0-9][0-9]*\)).*/\1/p' | wc -l | tr -d ' ')" "10"
+check "and the pattern loses none of the twenty lines" \
+      "$(printf '%s\n' "$out" | sed -n 's/.*at (\(-\{0,1\}[0-9][0-9]*\), \(-\{0,1\}[0-9][0-9]*\)).*/\1/p' | wc -l | tr -d ' ')" "20"
 
 # The oracle: the exact layout the example ships. The rerun check above only catches
 # nondeterminism; this catches a code change that silently moves the answer. If a change moves
 # these on purpose -- objective, search, repair -- re-measure, update the pins AND the README,
 # which quotes the same scores.
-check "the reference scores are the shipped ones" \
-      "$(printf '%s' "$out" | grep -cE '^(centroid *207656|human *131154) ')" "2"
-check "the shipped layout's score is pinned" \
-      "$(printf '%s' "$out" | grep 'the layout climb found')" \
+check "the reference scores are the shipped ones, both styles" \
+      "$(printf '%s' "$out" | grep -cE '^(centroid *(251673|207656)|human *(231877|131154)) ')" "4"
+check "the straight layout's score is pinned" \
+      "$(printf '%s' "$out" | grep 'score 130448')" \
+      "the layout climb found at seed 1, score 130448:"
+check "the routed layout's score is pinned" \
+      "$(printf '%s' "$out" | grep 'score 58302.3')" \
       "the layout climb found at seed 1, score 58302.3:"
-check "and its ten placements are pinned" \
+check "and all twenty placements are pinned" \
       "$(printf '%s' "$out" | grep ' at (' | digest)" \
-      "$(printf '%s\n' "  AI at (1385, 255)" "  AM at (2348, 848)" "  AP at (456, 1896)" \
+      "$(printf '%s\n' "  AI at (2463, 1042)" "  AM at (1549, 1031)" "  AP at (1359, 1147)" \
+         "  D at (960, 1854)" "  E at (371, 928)" "  J at (356, 1894)" "  P at (1992, 321)" \
+         "  Q at (2374, 825)" "  R at (1758, 917)" "  Y at (1535, 1661)" \
+         "  AI at (1385, 255)" "  AM at (2348, 848)" "  AP at (456, 1896)" \
          "  D at (643, 1606)" "  E at (940, 57)" "  J at (1778, 1673)" "  P at (274, 1903)" \
          "  Q at (1545, 1660)" "  R at (2531, 107)" "  Y at (625, 1779)" | digest)"
 

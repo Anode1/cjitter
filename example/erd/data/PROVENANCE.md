@@ -4,7 +4,9 @@ A real MySQL Workbench model of a production schema: 44 tables, 65 foreign keys 
 run between diagrammed tables, and a diagram layout a person maintained by hand across
 migrations. `ERD.png` is the current revision with
 the tables the last migration added drawn in amber; `ERD_prev.png` is the revision before it,
-36 tables. Both are drawn by `render.py` from the extracted geometry; a Workbench export would
+36 tables; `ERD_straight.png` is the current revision again with straight diagonal edges, the
+representation kept beside the routed one because the pair of pictures is the argument for
+routing. All are drawn by `render.py` from the extracted geometry; a Workbench export would
 carry the real names. Between the two: ten tables added, two dropped. The pair is what an incremental
 layouter has to reproduce: the previous diagram, the new schema, and a human's accepted
 answer for where the new tables went.
