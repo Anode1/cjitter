@@ -3,10 +3,12 @@
  * Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
  *
  * The original label placer painted every step into a double-buffered applet canvas, and
- * watching the layout settle was how the method was understood. The applet is gone; this
- * writes the same view as SVG frames, one per SAMPLE_EVERY evaluations, each frame the
- * proposal the search was considering at that moment. Labels are drawn half-transparent so
- * an overlap shows as a darker patch, which is the objective made visible.
+ * watching the layout settle, labels retracting from their neighbours until nothing
+ * overlapped, was how the method was understood. That placer moved one label at a time; the
+ * library's anneal moves every coordinate per proposal and plateaus on this problem, so the
+ * film follows the method that ends clean the way the memory does, the GA, one frame per
+ * improvement of the best layout so far. Labels are drawn half-transparent so an overlap
+ * shows as a darker patch, which is the objective made visible.
  *
  *     example/labels_movie [dir]        # writes dir/frame000.svg ... (dir must exist)
  *     make movie                        # builds the animated gif the README embeds
@@ -15,12 +17,13 @@
 #include "labels.c"
 #undef main
 
-#define SAMPLE_EVERY 250
-#define MAXFRAMES    256
+#define MAXFRAMES 256
 
 static struct {
     Labels *L;
     long    calls, nframes;
+    double  best;
+    long    evals[MAXFRAMES];
     double  frame[MAXFRAMES][2 * DEF_LABELS];
     double  fscore[MAXFRAMES];
 } M;
@@ -28,9 +31,21 @@ static struct {
 static double filmed(const double *x, void *ctx)
 {
     double f = overlap(x, ctx);
-    if (M.calls % SAMPLE_EVERY == 0 && M.nframes < MAXFRAMES) {
+    if (M.calls == 0 || f < M.best) {
+        M.best = f;
+        if (M.nframes == MAXFRAMES) {
+            /* full: keep every other frame and carry on, the ending matters most */
+            long i;
+            for (i = 1; i < MAXFRAMES / 2; i++) {
+                memcpy(M.frame[i], M.frame[2*i], sizeof M.frame[i]);
+                M.fscore[i] = M.fscore[2*i];
+                M.evals[i] = M.evals[2*i];
+            }
+            M.nframes = MAXFRAMES / 2;
+        }
         memcpy(M.frame[M.nframes], x, (size_t)(2 * M.L->n) * sizeof *x);
         M.fscore[M.nframes] = f;
+        M.evals[M.nframes] = M.calls;
         M.nframes++;
     }
     M.calls++;
@@ -52,7 +67,7 @@ static void write_frame(const char *dir, long i, const Labels *L,
     fprintf(fp, "<rect x='0' y='40' width='%g' height='%g' fill='#fafafa' stroke='#ccc'/>\n",
             L->cw * 10, L->ch * 10);
     fprintf(fp, "<text x='8' y='28' font-size='24' fill='#333'>"
-                "anneal, evaluation %ld, overlap %.1f</text>\n", evals, f);
+                "ga, evaluation %ld, overlap %.1f</text>\n", evals, f);
     for (j = 0; j < L->n; j++)
         fprintf(fp, "<rect x='%g' y='%g' width='%g' height='%g' rx='3' "
                     "fill='#fc3' fill-opacity='0.55' stroke='#963'/>\n",
@@ -83,12 +98,12 @@ int main(int argc, char **argv)
     M.L = &L;
 
     r.x = x;
-    if (cjitter_run("anneal", &p, &b, &r) != 0) {
+    if (cjitter_run("ga", &p, &b, &r) != 0) {
         fprintf(stderr, "labels_movie: run failed\n");
         return 1;
     }
     for (i = 0; i < M.nframes; i++)
-        write_frame(dir, i, &L, M.frame[i], M.fscore[i], i * SAMPLE_EVERY);
+        write_frame(dir, i, &L, M.frame[i], M.fscore[i], M.evals[i]);
     /* the settled answer, held as the final frame */
     write_frame(dir, M.nframes, &L, x, r.best, r.evals);
     printf("%ld frames in %s/, final overlap %.6g\n", M.nframes + 1, dir, r.best);
