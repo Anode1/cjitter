@@ -43,29 +43,60 @@ def pen_of(pts, figs, skip):
     return p
 
 
-def route(a, b, figs, cx, offs):
+def seg_cross(a1, a2, b1, b2):
+    def orient(p, q, r):
+        return (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0])
+    d1, d2 = orient(a1, a2, b1), orient(a1, a2, b2)
+    d3, d4 = orient(b1, b2, a1), orient(b1, b2, a2)
+    return ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0))
+
+
+def cross_count(pts, others):
+    k = 0
+    for opts in others:
+        for s1 in zip(pts, pts[1:]):
+            for s2 in zip(opts, opts[1:]):
+                if seg_cross(s1[0], s1[1], s2[0], s2[1]):
+                    k += 1
+    return k
+
+
+TIN = [0.15, 0.3, 0.5, 0.7, 0.85]
+TOUT = [-0.75, -0.5, -0.25, 1.25, 1.5, 1.75]
+
+
+def route(a, b, figs, cx, offs, already):
+    """Same rule as erd.c: the candidate pays penetration and crossings against every edge
+    already routed, in-channel shapes first, a clean one ends the search."""
     (ax, ay), (bx, by) = cx[a], cx[b]
     fa, fb = figs[a], figs[b]
     oa, ob = offs
-    ya, xa = ay + oa * fa[3], ax + oa * fa[2]   # this edge's own departure lines
-    yb, xb = by + ob * fb[3], bx + ob * fb[2]   # and arrival lines
+    ya, xa = ay + oa * fa[3], ax + oa * fa[2]
+    yb, xb = by + ob * fb[3], bx + ob * fb[2]
     cands = [[(ax, ya), (xb, ya), (xb, by)], [(xa, ay), (xa, yb), (bx, yb)]]
-    for t in T:
+    for t in TIN:
         mx = ax + t * (bx - ax)
         cands.append([(ax, ya), (mx, ya), (mx, yb), (bx, yb)])
-    for t in T:
+    for t in TIN:
+        my = ay + t * (by - ay)
+        cands.append([(xa, ay), (xa, my), (xb, my), (xb, by)])
+    for t in TOUT:
+        mx = ax + t * (bx - ax)
+        cands.append([(ax, ya), (mx, ya), (mx, yb), (bx, yb)])
+    for t in TOUT:
         my = ay + t * (by - ay)
         cands.append([(xa, ay), (xa, my), (xb, my), (xb, by)])
     best, bestcost = None, None
-    for pts in cands:
+    for i, pts in enumerate(cands):
         pen = pen_of(pts, figs, {a, b})
         length = sum(abs(x2 - x1) + abs(y2 - y1)
                      for (x1, y1), (x2, y2) in zip(pts, pts[1:]))
-        cost = 100.0 * pen + length
+        crs = cross_count(pts, already)
+        cost = 100.0 * (pen + crs) + length
         if bestcost is None or cost < bestcost:
             best, bestcost = pts, cost
-        if pen == 0:
-            break
+            if pen == 0 and crs == 0 and i < 12:
+                break
     return best
 
 
@@ -124,10 +155,12 @@ def render(rev, path, mark_added, straight=False):
     out = ["<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 %g %g' "
            "font-family='sans-serif'>" % (W, H),
            "<rect width='%g' height='%g' fill='#fafafa'/>" % (W, H)]
+    already = []
     for (a, b), off in zip(edges, slots):
         nu = mark_added and (a in added or b in added)
-        pts = [cx[a], cx[b]] if straight else route(a, b, figs, cx, off)
+        pts = [cx[a], cx[b]] if straight else route(a, b, figs, cx, off, already)
         pts = anchor(pts, figs[a], figs[b])
+        already.append(pts)
         out.append("<polyline points='%s' fill='none' stroke='%s' stroke-width='2'/>"
                    % (' '.join('%g,%g' % p for p in pts), '#c60' if nu else '#999'))
     for n, f in figs.items():

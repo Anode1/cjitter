@@ -197,6 +197,32 @@ static void anchor(const Erd *g, const double *v, long e0, long e1, Route *r)
     }
 }
 
+/* Which edges edge A can already see when it routes. Mode 0 is the frozen pass (earlier
+ * frozen edges only), mode 1 the scoring pass (all frozen, plus earlier migration edges),
+ * mode 2 the full report (everything earlier). Later edges pay for a pair's crossing, so
+ * each pair is priced exactly once. */
+static int routed_before(const Erd *g, long b, long a, int mode)
+{
+    if (b == a) return 0;
+    if (mode == 0) return !g->enew[b] && b < a;
+    if (mode == 1) return !g->enew[b] || b < a;
+    return b < a;
+}
+
+static long routes_cross(const Route *p, const Route *q);
+
+static long cand_cross(const Erd *g, const Route *rt, const Route *cand, long a, int mode)
+{
+    long b, k = 0;
+    for (b = 0; b < g->ne; b++) {
+        if (!routed_before(g, b, a, mode)) continue;
+        if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
+            g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
+        k += routes_cross(cand, &rt[b]);
+    }
+    return k;
+}
+
 /* Route edge A as Workbench draws one: orthogonal segments at 0 and 90 degrees, never a
  * diagonal. The candidates are the two L shapes and Z shapes whose middle segment slides
  * across the channel between the endpoints and one step beyond it on either side, which is
@@ -206,13 +232,15 @@ static void anchor(const Erd *g, const double *v, long e0, long e1, Route *r)
  * frozen edges get routed against the frozen diagram alone. Returns the route's own cost,
  * penetration at W_TIER plus length; crossings are the caller's to add, since they depend on
  * every other route. */
-static double route_edge(const Erd *g, const double *v, long a, long ntab, Route *r,
-                         double *pen_out)
+static double route_edge(const Erd *g, const double *v, long a, long ntab,
+                         const Route *rt, int mode, Route *r,
+                         double *pen_out, long *crs_out)
 {
-    static const double T[7] = { -0.25, 0.15, 0.3, 0.5, 0.7, 0.85, 1.25 };
+    static const double TIN[5]  = { 0.15, 0.3, 0.5, 0.7, 0.85 };
+    static const double TOUT[6] = { -0.75, -0.5, -0.25, 1.25, 1.5, 1.75 };
     double ax, ay, bx, by, bestcost = 0, bestpen = 0;
-    long e0 = g->e[a][0], e1 = g->e[a][1];
-    int c, have = 0, nc = g->straight ? 1 : 16;
+    long e0 = g->e[a][0], e1 = g->e[a][1], bestcrs = 0;
+    int c, have = 0, nc = 24;
     pos(g, v, e0, &ax, &ay);
     pos(g, v, e1, &bx, &by);
     if (g->straight) {
@@ -232,8 +260,13 @@ static double route_edge(const Erd *g, const double *v, long a, long ntab, Route
             pen += through(g, v, i, cand.px[0], cand.py[0], cand.px[1], cand.py[1]);
         }
         *r = cand;
-        if (pen_out) *pen_out = pen;
-        return W_TIER * pen + seglen(cand.px[1] - cand.px[0], cand.py[1] - cand.py[0]);
+        {
+            long crs = cand_cross(g, rt, &cand, a, mode);
+            if (pen_out) *pen_out = pen;
+            if (crs_out) *crs_out = crs;
+            return W_TIER * (pen + (double)crs)
+                 + seglen(cand.px[1] - cand.px[0], cand.py[1] - cand.py[0]);
+        }
     }
     for (c = 0; c < nc; c++) {
         Route cand;
@@ -250,13 +283,23 @@ static double route_edge(const Erd *g, const double *v, long a, long ntab, Route
         } else if (c == 1) {                /* L: vertical, then horizontal */
             cand.px[0] = xa; cand.py[0] = ay; cand.px[1] = xa; cand.py[1] = yb;
             cand.px[2] = bx; cand.py[2] = yb; cand.np = 3;
-        } else if (c < 9) {                 /* Z: vertical middle segment */
-            double mx = ax + T[c - 2] * (bx - ax);
+        } else if (c < 7) {                 /* Z, vertical middle, inside the channel */
+            double mx = ax + TIN[c - 2] * (bx - ax);
             cand.px[0] = ax; cand.py[0] = ya; cand.px[1] = mx; cand.py[1] = ya;
             cand.px[2] = mx; cand.py[2] = yb; cand.px[3] = bx; cand.py[3] = yb;
             cand.np = 4;
-        } else {                            /* Z: horizontal middle segment */
-            double my = ay + T[c - 9] * (by - ay);
+        } else if (c < 12) {                /* Z, horizontal middle, inside the channel */
+            double my = ay + TIN[c - 7] * (by - ay);
+            cand.px[0] = xa; cand.py[0] = ay; cand.px[1] = xa; cand.py[1] = my;
+            cand.px[2] = xb; cand.py[2] = my; cand.px[3] = xb; cand.py[3] = by;
+            cand.np = 4;
+        } else if (c < 18) {                /* Z, vertical middle, detouring beyond it */
+            double mx = ax + TOUT[c - 12] * (bx - ax);
+            cand.px[0] = ax; cand.py[0] = ya; cand.px[1] = mx; cand.py[1] = ya;
+            cand.px[2] = mx; cand.py[2] = yb; cand.px[3] = bx; cand.py[3] = yb;
+            cand.np = 4;
+        } else {                            /* Z, horizontal middle, detouring */
+            double my = ay + TOUT[c - 18] * (by - ay);
             cand.px[0] = xa; cand.py[0] = ay; cand.px[1] = xa; cand.py[1] = my;
             cand.px[2] = xb; cand.py[2] = my; cand.px[3] = xb; cand.py[3] = by;
             cand.np = 4;
@@ -292,15 +335,23 @@ static double route_edge(const Erd *g, const double *v, long a, long ntab, Route
         for (s = 0; s + 1 < cand.np; s++)
             len += fabs(cand.px[s+1] - cand.px[s]) + fabs(cand.py[s+1] - cand.py[s]);
         cost = W_TIER * pen + len;
-        if (!have || cost < bestcost) {
-            have = 1; bestcost = cost; bestpen = pen; *r = cand;
+        if (!have || cost < bestcost + 1e-9) {
+            long crs;
+            /* crossings are the expensive part of a candidate's price, so they are only
+             * computed when penetration and length alone have not already lost */
+            crs = cand_cross(g, rt, &cand, a, mode);
+            cost += W_TIER * (double)crs;
+            if (!have || cost < bestcost) {
+                have = 1; bestcost = cost; bestpen = pen; bestcrs = crs; *r = cand;
+            }
+            /* A clean candidate among the in-channel shapes ends the search: those shapes
+             * share their Manhattan length, the detours are longer, and an equal-cost later
+             * shape would lose the tie anyway. */
+            if (bestpen == 0 && bestcrs == 0 && c < 12) break;
         }
-        /* A clean candidate ends the search exactly: every in-range shape has the same
-         * Manhattan length and the detours are longer, so nothing later can cost less, and
-         * an equal-cost later shape would lose the tie anyway. */
-        if (bestpen == 0) break;
     }
     if (pen_out) *pen_out = bestpen;
+    if (crs_out) *crs_out = bestcrs;
     return bestcost;
 }
 
@@ -327,21 +378,12 @@ static long routes_cross(const Route *p, const Route *q)
 static double frozen_part(Erd *g)
 {
     double total = 0;
-    long a, b;
-    for (a = 0; a < g->ne; a++) {
+    long a;
+    for (a = 0; a < g->ne; a++)
         g->enew[a] = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
+    for (a = 0; a < g->ne; a++)
         if (!g->enew[a])
-            total += route_edge(g, NULL, a, g->nfixed, &g->rt[a], NULL);
-    }
-    for (a = 0; a < g->ne; a++) {
-        if (g->enew[a]) continue;
-        for (b = a + 1; b < g->ne; b++) {
-            if (g->enew[b]) continue;
-            if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
-                g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
-            total += W_TIER * (double)routes_cross(&g->rt[a], &g->rt[b]);
-        }
-    }
+            total += route_edge(g, NULL, a, g->nfixed, g->rt, 0, &g->rt[a], NULL, NULL);
     return total;
 }
 
@@ -349,12 +391,14 @@ static double score(const double *v, void *ctx)
 {
     Erd *g = ctx;
     double total = g->konst;
-    long a, b, i;
+    long a, i;
     int s;
-    /* the migration's edges, routed fresh around wherever its tables currently sit */
+    /* the migration's edges, routed in index order, each seeing every fixed connector and
+     * the migration edges already routed this evaluation; the route's cost already carries
+     * its crossings, so no pair is priced twice */
     for (a = 0; a < g->ne; a++)
         if (g->enew[a])
-            total += route_edge(g, v, a, g->n, &g->rt[a], NULL);
+            total += route_edge(g, v, a, g->n, g->rt, 1, &g->rt[a], NULL, NULL);
     /* the fixed connectors, penetrating any new table parked on top of them */
     for (a = 0; a < g->ne; a++) {
         if (g->enew[a]) continue;
@@ -363,14 +407,6 @@ static double score(const double *v, void *ctx)
                 total += W_TIER * apen(g, v, i, g->rt[a].px[s], g->rt[a].py[s],
                                        g->rt[a].px[s+1], g->rt[a].py[s+1]);
     }
-    /* crossings where at least one side belongs to the migration */
-    for (a = 0; a < g->ne; a++)
-        for (b = a + 1; b < g->ne; b++) {
-            if (!g->enew[a] && !g->enew[b]) continue;
-            if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
-                g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
-            total += W_TIER * (double)routes_cross(&g->rt[a], &g->rt[b]);
-        }
     return total;
 }
 
@@ -382,19 +418,15 @@ static double score(const double *v, void *ctx)
 static void layout_report(const Erd *g, const double *v, Route *rt,
                           long *ncross, double *pen)
 {
-    long a, b, k = 0;
+    long a, k = 0;
     double p = 0;
     for (a = 0; a < g->ne; a++) {
         double ep;
-        route_edge(g, v, a, g->n, &rt[a], &ep);
+        long ec;
+        route_edge(g, v, a, g->n, rt, 2, &rt[a], &ep, &ec);
         p += ep;
+        k += ec;
     }
-    for (a = 0; a < g->ne; a++)
-        for (b = a + 1; b < g->ne; b++) {
-            if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
-                g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
-            k += routes_cross(&rt[a], &rt[b]);
-        }
     *ncross = k;
     *pen = p;
 }

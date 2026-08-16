@@ -99,13 +99,13 @@ check "the straight model's calibration is pinned" \
       "$(printf '%s' "$out" | grep '1943.96 penetration')" \
       "           20 crossings, 1943.96 penetration under this edge model (the hand"
 check "the routed model's calibration is pinned" \
-      "$(printf '%s' "$out" | grep '491 penetration')" \
-      "           33 crossings, 491 penetration under this edge model (the hand"
+      "$(printf '%s' "$out" | grep '323 penetration')" \
+      "           27 crossings, 323 penetration under this edge model (the hand"
 check "both returned layouts report their feasibility" \
       "$(printf '%s' "$out" | grep -c '^under this edge model:')" "2"
 check "the routed layout's feasibility is pinned" \
-      "$(printf '%s' "$out" | grep '54 crossings')" \
-      "under this edge model: 54 crossings, 0 penetration"
+      "$(printf '%s' "$out" | grep '65 crossings')" \
+      "under this edge model: 65 crossings, 0.40782 penetration"
 check "erd prints both table headers" "$(printf '%s' "$out" | grep -c 'vs random')" "2"
 check "erd reports all four methods twice" \
       "$(printf '%s' "$out" | grep -cE '^(random|climb|anneal|ga) ')" "8"
@@ -128,21 +128,21 @@ check "and the pattern loses none of the twenty lines" \
 # these on purpose -- objective, search, repair -- re-measure, update the pins AND the README,
 # which quotes the same scores.
 check "the reference scores are the shipped ones, both styles" \
-      "$(printf '%s' "$out" | grep -cE '^(centroid *(226609|201247)|human *(218207|149519)) ')" "4"
+      "$(printf '%s' "$out" | grep -cE '^(centroid *(226609|194470)|human *(218207|157552)) ')" "4"
 check "the straight layout's score is pinned" \
       "$(printf '%s' "$out" | grep 'score 116506')" \
       "the layout climb found at seed 1, score 116506:"
 check "the routed layout's score is pinned" \
-      "$(printf '%s' "$out" | grep 'score 46453.2')" \
-      "the layout climb found at seed 1, score 46453.2:"
+      "$(printf '%s' "$out" | grep 'score 53061.4')" \
+      "the layout climb found at seed 1, score 53061.4:"
 check "and all twenty placements are pinned" \
       "$(printf '%s' "$out" | grep ' at (' | digest)" \
       "$(printf '%s\n' "  AI at (162, 275)" "  AM at (2835, 1077)" "  AP at (1234, 1130)" \
          "  D at (835, 1799)" "  E at (322, 60)" "  J at (1476, 494)" "  P at (2386, 303)" \
          "  Q at (1589, 1056)" "  R at (2355, 1473)" "  Y at (79, 420)" \
-         "  AI at (930, 789)" "  AM at (2238, 956)" "  AP at (1130, 779)" \
-         "  D at (711, 1767)" "  E at (1346, 748)" "  J at (2509, 1894)" "  P at (2566, 1569)" \
-         "  Q at (2434, 938)" "  R at (1176, 1005)" "  Y at (74, 657)" | digest)"
+         "  AI at (1628, 1776)" "  AM at (1346, 915)" "  AP at (2606, 1818)" \
+         "  D at (1949, 1385)" "  E at (85, 1901)" "  J at (1842, 1745)" "  P at (2493, 755)" \
+         "  Q at (2792, 1850)" "  R at (1504, 1531)" "  Y at (1026, 1484)" | digest)"
 
 "$erd" > "$tmp/e1"
 "$erd" > "$tmp/e2"
@@ -158,9 +158,9 @@ check "erd --svg exits 0"            "$rc" "0"
 check "and emits an svg"             "$(head -c 4 "$tmp/e.svg")" "<svg"
 check "with every table drawn four times" "$(grep -c '<rect' "$tmp/e.svg")" "181"
 check "and every connector routed, four panels" "$(grep -c '<polyline' "$tmp/e.svg")" "236"
-check "carrying the pinned centroid score" "$(grep -c '201247' "$tmp/e.svg")" "1"
-check "the pinned search score"      "$(grep -c '46453.2' "$tmp/e.svg")" "1"
-check "and the pinned human score"   "$(grep -c '149519' "$tmp/e.svg")" "1"
+check "carrying the pinned centroid score" "$(grep -c '194470' "$tmp/e.svg")" "1"
+check "the pinned search score"      "$(grep -c '53061.4' "$tmp/e.svg")" "1"
+check "and the pinned human score"   "$(grep -c '157552' "$tmp/e.svg")" "1"
 set +e
 "$erd" --svg-straight > "$tmp/es.svg" 2>/dev/null; rc=$?
 set -e

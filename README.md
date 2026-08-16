@@ -89,7 +89,7 @@ above:
 
 Each edge model is calibrated against the one certain fact about the human's layout: it
 achieved zero crossings and zero edges under a table on screen. The straight model charges
-that clean screen 20 crossings and 1944 penetration; the routed model 33 and 491. Every
+that clean screen 20 crossings and 1944 penetration; the routed model 27 and 323. Every
 score means only as much as its calibration line, and the run prints both:
 
     34 tables already placed, 10 added by a migration, 59 foreign keys.
@@ -108,23 +108,23 @@ score means only as much as its calibration line, and the run prints both:
 
     ---- orthogonal routed connectors ----
 
-    centroid         201247   (place each new table at its neighbours' centroid)
-    human            149519   (where the human actually put them)
-               33 crossings, 491 penetration under this edge model
+    centroid         194470   (place each new table at its neighbours' centroid)
+    human            157552   (where the human actually put them)
+               27 crossings, 323 penetration under this edge model
 
     method         median        range    wins    sign-p   vs random
-    random         109471      41766.5       -         - the control
-    climb         52639.3      7611.66    5/5     0.0312      better
-    anneal        48265.6        20042    5/5     0.0312      better
-    ga            42920.1      7632.14    5/5     0.0312      better
+    random         100056      26357.5       -         - the control
+    climb         46133.7      18661.7    5/5     0.0312      better
+    anneal        50691.7      23410.8    5/5     0.0312      better
+    ga            40118.6      4554.91    5/5     0.0312      better
 
 All three searches beat the control on every seed under both models, and the heuristic loses
 under both: a table at its neighbours' centroid lands on the connectors running between its
 neighbours. Read the human rows through the calibration lines: most of the human's score in
 each section is that edge model failing to reproduce their real connectors, which is why even
 the control's median outscores them in the routed section. The comparison that survives is
-the feasibility pair. The routed seed-1 search layout reaches 0 penetration and 54 crossings;
-the human's routes to 491 and 33. Each is winning a different half of what the tool and the
+the feasibility pair. The routed seed-1 search layout reaches 0.4 penetration and 65 crossings;
+the human's routes to 323 and 27. Each is winning a different half of what the tool and the
 person jointly achieved as 0 and 0, and closing that gap is the router's open problem, not
 the search's. Connectors leave a table's border at that edge's own attachment point, spread
 by the table's degree, so no two connectors ever share a segment: an edge joins two tables

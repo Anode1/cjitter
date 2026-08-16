@@ -1,6 +1,6 @@
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2959 8234' font-family='sans-serif'>
 <rect width='2959' height='8234' fill='white'/>
-<text x='1479.5' y='60' text-anchor='middle' font-size='44' fill='#111'>scrambled: as a reverse-engineering leaves the diagram</text>
+<text x='1479.5' y='60' text-anchor='middle' font-size='44' fill='#111'>scrambled: the kept positions are gone after a reverse-engineering</text>
 <g transform='translate(0,90)'>
   <rect x='5' y='0' width='2949' height='1966' fill='#fafafa' stroke='#ccc'/>
   <polyline points='1352.7,1377.11 547.174,1196.73' fill='none' stroke='#999' stroke-width='2'/>
