@@ -17,8 +17,8 @@
 #undef main
 
 #define MAXKEY 512
-#define KEYS   28
-#define TWEEN  6
+#define STEP   22.0   /* canvas units of the largest table move per film frame */
+#define MAXF   420    /* frame budget; tweens scale down proportionally to fit */
 
 static struct {
     long   nkey, calls;
@@ -116,18 +116,36 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* KEYS keyframes spread across the improvements, first and last always kept */
-    for (key = 0; key + 1 < T.nkey && key + 1 < KEYS; key++) {
-        long a = key * (T.nkey - 1) / (KEYS - 1 > 1 ? KEYS - 1 : 1);
-        long bnext = (key + 1) * (T.nkey - 1) / (KEYS - 1 > 1 ? KEYS - 1 : 1);
-        if (bnext <= a) bnext = a + 1;
-        if (bnext >= T.nkey) bnext = T.nkey - 1;
-        for (t = 0; t < TWEEN; t++) {
-            double u = (double)t / TWEEN;
-            for (k = 0; k < nv; k++)
-                v[k] = T.key[a][k] + u * (T.key[bnext][k] - T.key[a][k]);
-            frame(dir, nf++, &g, v, T.kev[a], T.ksc[a]);
+    /* Every improvement is a keyframe; the tween count per gap is proportional to the
+     * largest single-table move in it, so a long glide gets many small steps and nothing
+     * ever teleports. If the total overruns the frame budget, every gap scales down
+     * proportionally, one frame minimum. */
+    {
+        static long tw[MAXKEY];
+        long total = 0;
+        for (key = 0; key + 1 < T.nkey; key++) {
+            double dmax = 0;
+            for (k = 0; k < nv; k += 2) {
+                double dx = T.key[key+1][k]   - T.key[key][k];
+                double dy = T.key[key+1][k+1] - T.key[key][k+1];
+                double d = fabs(dx) > fabs(dy) ? fabs(dx) : fabs(dy);
+                if (d > dmax) dmax = d;
+            }
+            tw[key] = (long)(dmax / STEP) + 1;
+            total += tw[key];
         }
+        if (total > MAXF)
+            for (key = 0; key + 1 < T.nkey; key++) {
+                tw[key] = tw[key] * MAXF / total;
+                if (tw[key] < 1) tw[key] = 1;
+            }
+        for (key = 0; key + 1 < T.nkey; key++)
+            for (t = 0; t < tw[key]; t++) {
+                double u = (double)t / (double)tw[key];
+                for (k = 0; k < nv; k++)
+                    v[k] = T.key[key][k] + u * (T.key[key+1][k] - T.key[key][k]);
+                frame(dir, nf++, &g, v, T.kev[key], T.ksc[key]);
+            }
     }
     frame(dir, nf++, &g, T.key[T.nkey - 1], T.kev[T.nkey - 1], T.ksc[T.nkey - 1]);
     fprintf(stderr, "%ld frames from %ld improvements, final %.6g\n",

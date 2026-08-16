@@ -37,7 +37,7 @@ movie: example/erd/erd_movie.c example/erd/erd.c $(OBJ) $(HEADERS)
 	rm -rf movie_frames && mkdir movie_frames
 	./erd_movie movie_frames
 	for f in movie_frames/frame*.svg; do rsvg-convert -w 640 "$$f" -o "$${f%.svg}.png"; done
-	convert -delay 5 -loop 0 movie_frames/frame*.png \
+	convert -delay 4 -loop 0 movie_frames/frame*.png \
 	        \( +clone -set delay 400 \) +swap +delete -layers Optimize example/erd/erd_settle.gif
 	rm -rf movie_frames erd_movie
 	@echo "example/erd/erd_settle.gif rebuilt"
