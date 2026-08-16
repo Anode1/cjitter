@@ -29,6 +29,18 @@ c/%.o: c/%.c $(HEADERS)
 
 examples: labels erd
 
+# The animated view of annealing settling the labels, the README's moving figure. Not part
+# of check: it needs rsvg-convert and ImageMagick, and its output is a committed fixture.
+movie: example/labels_movie.c example/labels.c $(OBJ) $(HEADERS)
+	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o labels_movie example/labels_movie.c $(OBJ) $(LIBM) $(LDLIBS)
+	rm -rf movie_frames && mkdir movie_frames
+	./labels_movie movie_frames
+	for f in movie_frames/frame*.svg; do rsvg-convert -w 500 "$$f" -o "$${f%.svg}.png"; done
+	convert -delay 10 -loop 0 movie_frames/frame*.png \
+	        \( +clone -set delay 300 \) +swap +delete example/labels_anneal.gif
+	rm -rf movie_frames labels_movie
+	@echo "example/labels_anneal.gif rebuilt"
+
 labels: example/labels.c $(OBJ) $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ example/labels.c $(OBJ) $(LIBM) $(LDLIBS)
 

@@ -52,6 +52,13 @@ no edges between them, nothing allowed to intersect. Cheap, exact, deterministic
 staying inside the container is a hard constraint in the repair callback, and `cjitter.h`
 says why that is not a penalty term.
 
+![Annealing settling 90 labels, one frame per 250 evaluations](example/labels_anneal.gif)
+
+The moving figure is the 2001 debugging view recreated, the double-buffered applet canvas
+that made the method legible then: one frame per 250 evaluations, an overlap drawn as the
+darker patch, the wandering uphill moves included because they are the method. `make movie`
+rebuilds it.
+
 **`example/erd/`** is the application this was written for. Laying out a diagram with the
 fewest edge crossings is NP-complete (Garey and Johnson, *Crossing Number is NP-Complete*,
 SIAM J. Algebraic Discrete Methods 4:312-316, 1983), so there is no polynomial-time exact

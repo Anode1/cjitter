@@ -10,3 +10,5 @@ c/*.o
 /erd_ubsan
 *.mwb.new
 /erd.svg
+/labels_movie
+movie_frames/
