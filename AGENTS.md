@@ -18,8 +18,10 @@ them: an earlier working title, `gaop`, would have baked in a misattribution, be
 solved the 2001 problem was called a genetic algorithm and was in fact per-label descent
 under the one summed cost: each label nudged a pixel at a time in the direction of least
 intersection with its neighbours, with a little noise on the step, the cycle stopping when
-the summed intersection area reached zero. Descent plus noise is jitter, which is why the
-name fits the whole family.
+the summed intersection area reached zero. On 2001 hardware it took a few seconds: the
+labels retracted from every neighbour and the space filled. There was a practical ceiling,
+found heuristically, a label density above which the cycle stopped reaching zero. Descent
+plus noise is jitter, which is why the name fits the whole family.
 
 ## The contract (read first)
 
