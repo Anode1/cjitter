@@ -2,8 +2,8 @@
 
 A real MySQL Workbench model of a production schema: 44 tables, 65 foreign keys of which 59
 run between diagrammed tables, and a diagram layout a person maintained by hand across
-migrations. `ERD.png` is the current revision with
-the tables the last migration added drawn in amber; `ERD_prev.png` is the revision before it,
+migrations. `ERD_routed.png` is the current revision with
+the tables the last migration added drawn in amber; `ERD_prev_routed.png` is the revision before it,
 36 tables; `ERD_straight.png` is the current revision again with straight diagonal edges, the
 representation kept beside the routed one because the pair of pictures is the argument for
 routing. All are drawn by `render.py` from the extracted geometry; a Workbench export would

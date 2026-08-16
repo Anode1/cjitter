@@ -71,22 +71,21 @@ Both revisions are in the repository, drawn by `data/render.py` from the extract
 Neither image is a Workbench export; an export would carry the real names. The diagram before
 the migration:
 
-![Before the migration: 36 tables in the human's layout](example/erd/data/ERD_prev.png)
+![Before the migration: 36 tables in the human's layout](example/erd/data/ERD_prev_routed.png)
 
 and after it, the ten added tables in amber:
 
-![After the migration: 44 tables, the ten added in amber](example/erd/data/ERD.png)
+![After the migration: 44 tables, the ten added in amber](example/erd/data/ERD_routed.png)
 
 There are two ways to draw an edge, and the example runs its whole experiment under each,
 toggled by one boolean in the code. The straight diagonal segment is the general-graph
 representation, and it is what surprisingly rich tools draw for ERDs; the orthogonal routed
 connector, an L or a Z with the middle segment sliding across the channel the way a person
 nudges a connector past an obstacle, is what Workbench draws and what a reader sees. The
-same current revision in both representations:
+same current revision, drawn with straight edges this time; the routed drawing of it is just
+above:
 
 ![The diagonal representation: straight center-to-center edges](example/erd/data/ERD_straight.png)
-
-![The routed representation: orthogonal connectors](example/erd/data/ERD.png)
 
 Each edge model is calibrated against the one certain fact about the human's layout: it
 achieved zero crossings and zero edges under a table on screen. The straight model charges

@@ -1,4 +1,4 @@
-"""Renders ERD.png and ERD_prev.png from graph_anon.json. These images are this renderer's
+"""Renders ERD_routed.png and ERD_prev_routed.png from graph_anon.json. These images are this renderer's
 work, never a Workbench export -- an export would carry the real names, which is the reason the
 committed pair can exist at all. The connectors are routed by the same rule as erd.c's
 route_edge (two L shapes, Z shapes sliding across the channel, least penetration wins, length
@@ -9,8 +9,8 @@ ERD_straight is the same current revision with straight center-to-center edges, 
 general-graph representation that diagonal-edge tools draw; the pair of pictures is the
 argument for routing, so both are kept.
 
-    python3 render.py && rsvg-convert -w 1800 ERD_anon.svg -o ERD.png \
-                      && rsvg-convert -w 1800 ERD_prev_anon.svg -o ERD_prev.png \
+    python3 render.py && rsvg-convert -w 1800 ERD_anon.svg -o ERD_routed.png \
+                      && rsvg-convert -w 1800 ERD_prev_anon.svg -o ERD_prev_routed.png \
                       && rsvg-convert -w 1800 ERD_straight_anon.svg -o ERD_straight.png
 """
 import json
