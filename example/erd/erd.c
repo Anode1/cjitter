@@ -25,6 +25,7 @@
 #include <math.h>
 
 #include "../../c/cjitter.h"
+#include "../../c/rng.h"
 #include "erd_data.h"
 
 #define MAXN 64
@@ -65,6 +66,10 @@ typedef struct {
     double w[MAXN], h[MAXN];
     long   e[MAXE][2];
     int    enew[MAXE];             /* does edge a touch a new table? decided once */
+    double ofr0[MAXE], ofr1[MAXE]; /* attachment offsets, a fraction of the table side: each
+                                      edge leaves its table at its own point, spread by the
+                                      table's degree, so no two connectors share a segment
+                                      and draw as a three-way junction */
     int    straight;               /* the one style boolean: straight diagonal edges, the
                                       representation diagonal-edge tools draw, instead of
                                       routed orthogonal connectors */
@@ -150,6 +155,48 @@ static double apen(const Erd *g, const double *v, long i,
     return through(g, v, i, x1, y1, x2, y2);
 }
 
+/* Move a polyline endpoint from its table's centre to the table's border, along the segment
+ * it starts: connectors leave a table's side, the way the tool draws them, never its centre.
+ * T is the border's position as a fraction of the segment; past 1 the segment ends inside
+ * the table (adjacent or overlapping endpoints) and the centre stays. */
+static double trim_t(double x0, double y0, double x1, double y1, double w, double h)
+{
+    double dx = x1 - x0, dy = y1 - y0, t = 2;
+    if (dx != 0) { double tx = (w / 2) / fabs(dx); if (tx < t) t = tx; }
+    if (dy != 0) { double ty = (h / 2) / fabs(dy); if (ty < t) t = ty; }
+    return t;
+}
+
+static void anchor(const Erd *g, const double *v, long e0, long e1, Route *r)
+{
+    double px, py, t;
+    int last = r->np - 1;
+    if (r->np == 2) {
+        /* one segment: both trims share it, and they must not cross each other */
+        double ta, tb;
+        pos(g, v, e0, &px, &py);
+        ta = trim_t(r->px[0], r->py[0], r->px[1], r->py[1], g->w[e0], g->h[e0]);
+        pos(g, v, e1, &px, &py);
+        tb = trim_t(r->px[1], r->py[1], r->px[0], r->py[0], g->w[e1], g->h[e1]);
+        if (ta + tb < 1) {
+            double dx = r->px[1] - r->px[0], dy = r->py[1] - r->py[0];
+            r->px[0] += ta * dx; r->py[0] += ta * dy;
+            r->px[1] -= tb * dx; r->py[1] -= tb * dy;
+        }
+        return;
+    }
+    t = trim_t(r->px[0], r->py[0], r->px[1], r->py[1], g->w[e0], g->h[e0]);
+    if (t <= 1) {
+        r->px[0] += t * (r->px[1] - r->px[0]);
+        r->py[0] += t * (r->py[1] - r->py[0]);
+    }
+    t = trim_t(r->px[last], r->py[last], r->px[last-1], r->py[last-1], g->w[e1], g->h[e1]);
+    if (t <= 1) {
+        r->px[last] += t * (r->px[last-1] - r->px[last]);
+        r->py[last] += t * (r->py[last-1] - r->py[last]);
+    }
+}
+
 /* Route edge A as Workbench draws one: orthogonal segments at 0 and 90 degrees, never a
  * diagonal. The candidates are the two L shapes and Z shapes whose middle segment slides
  * across the channel between the endpoints and one step beyond it on either side, which is
@@ -175,38 +222,55 @@ static double route_edge(const Erd *g, const double *v, long a, long ntab, Route
         long i;
         cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = bx; cand.py[1] = by;
         cand.np = 2;
-        cand.minx = ax < bx ? ax : bx; cand.maxx = ax < bx ? bx : ax;
-        cand.miny = ay < by ? ay : by; cand.maxy = ay < by ? by : ay;
+        anchor(g, v, e0, e1, &cand);
+        cand.minx = cand.px[0] < cand.px[1] ? cand.px[0] : cand.px[1];
+        cand.maxx = cand.px[0] < cand.px[1] ? cand.px[1] : cand.px[0];
+        cand.miny = cand.py[0] < cand.py[1] ? cand.py[0] : cand.py[1];
+        cand.maxy = cand.py[0] < cand.py[1] ? cand.py[1] : cand.py[0];
         for (i = 0; i < ntab; i++) {
             if (i == e0 || i == e1) continue;
-            pen += through(g, v, i, ax, ay, bx, by);
+            pen += through(g, v, i, cand.px[0], cand.py[0], cand.px[1], cand.py[1]);
         }
         *r = cand;
         if (pen_out) *pen_out = pen;
-        return W_TIER * pen + seglen(bx - ax, by - ay);
+        return W_TIER * pen + seglen(cand.px[1] - cand.px[0], cand.py[1] - cand.py[0]);
     }
     for (c = 0; c < nc; c++) {
         Route cand;
         double cost, pen = 0, len = 0;
         long i;
         int s;
+        double ya = ay + g->ofr0[a] * g->h[e0];   /* horizontal departure line */
+        double xa = ax + g->ofr0[a] * g->w[e0];   /* vertical departure line */
+        double yb = by + g->ofr1[a] * g->h[e1];   /* horizontal arrival line */
+        double xb = bx + g->ofr1[a] * g->w[e1];   /* vertical arrival line */
         if (c == 0) {                       /* L: horizontal, then vertical */
-            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = bx; cand.py[1] = ay;
-            cand.px[2] = bx; cand.py[2] = by; cand.np = 3;
+            cand.px[0] = ax; cand.py[0] = ya; cand.px[1] = xb; cand.py[1] = ya;
+            cand.px[2] = xb; cand.py[2] = by; cand.np = 3;
         } else if (c == 1) {                /* L: vertical, then horizontal */
-            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = ax; cand.py[1] = by;
-            cand.px[2] = bx; cand.py[2] = by; cand.np = 3;
+            cand.px[0] = xa; cand.py[0] = ay; cand.px[1] = xa; cand.py[1] = yb;
+            cand.px[2] = bx; cand.py[2] = yb; cand.np = 3;
         } else if (c < 9) {                 /* Z: vertical middle segment */
             double mx = ax + T[c - 2] * (bx - ax);
-            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = mx; cand.py[1] = ay;
-            cand.px[2] = mx; cand.py[2] = by; cand.px[3] = bx; cand.py[3] = by;
+            cand.px[0] = ax; cand.py[0] = ya; cand.px[1] = mx; cand.py[1] = ya;
+            cand.px[2] = mx; cand.py[2] = yb; cand.px[3] = bx; cand.py[3] = yb;
             cand.np = 4;
         } else {                            /* Z: horizontal middle segment */
             double my = ay + T[c - 9] * (by - ay);
-            cand.px[0] = ax; cand.py[0] = ay; cand.px[1] = ax; cand.py[1] = my;
-            cand.px[2] = bx; cand.py[2] = my; cand.px[3] = bx; cand.py[3] = by;
+            cand.px[0] = xa; cand.py[0] = ay; cand.px[1] = xa; cand.py[1] = my;
+            cand.px[2] = xb; cand.py[2] = my; cand.px[3] = xb; cand.py[3] = by;
             cand.np = 4;
         }
+        /* collapse zero-length segments so the border trim always sees a real direction */
+        {
+            int m2 = 1;
+            for (s = 1; s < cand.np; s++)
+                if (cand.px[s] != cand.px[m2-1] || cand.py[s] != cand.py[m2-1]) {
+                    cand.px[m2] = cand.px[s]; cand.py[m2] = cand.py[s]; m2++;
+                }
+            cand.np = m2;
+        }
+        if (cand.np >= 2) anchor(g, v, e0, e1, &cand);
         cand.minx = cand.maxx = cand.px[0];
         cand.miny = cand.maxy = cand.py[0];
         for (s = 1; s < cand.np; s++) {
@@ -422,33 +486,37 @@ static void svg_panel(const Erd *g, const double *v, double ox)
     }
 }
 
-/* Initial state, final state, and the reference: the centroid heuristic, the search's answer,
- * and the layout the human actually accepted, stacked vertically, the frozen tables identical
- * in all three. What the scores say, made visible: the heuristic drops each new table onto the
- * edges running between its neighbours. */
-static void svg_out(const Erd *g, const double *xc, double sc,
+/* Four states, stacked: the scramble reverse-engineering leaves, the centroid heuristic, the
+ * search's answer, and the layout the human actually accepted. The frozen tables are
+ * identical in the middle two and the reference; the scrambled panel is the diagram nobody
+ * wants, the reason the hour was spent. */
+static void svg_out(const Erd *g, const Erd *gs, const double *xs,
+                    const double *xc, double sc,
                     const double *xb, const char *method, double sb,
                     const double *xh, double sh)
 {
-    double W = g->cw + 10, band = 90, H = 3 * (g->ch + band) + 10;
-    const double *v[3];
-    const char *title[3];
-    char t0[96], t1[96], t2[96];
+    double W = g->cw + 10, band = 90, H = 4 * (g->ch + band) + 10;
+    const double *v[4];
+    const Erd *ge[4];
+    const char *title[4];
+    char t1[96], t2[96], t3[96];
     long j;
-    v[0] = xc; v[1] = xb; v[2] = xh;
-    snprintf(t0, sizeof t0, "initial: neighbours&#8217; centroid, score %.6g", sc);
-    snprintf(t1, sizeof t1, "final: %s at seed 1, score %.6g", method, sb);
-    snprintf(t2, sizeof t2, "reference: the human&#8217;s accepted layout, score %.6g", sh);
-    title[0] = t0; title[1] = t1; title[2] = t2;
+    ge[0] = gs; ge[1] = g; ge[2] = g; ge[3] = g;
+    v[0] = xs; v[1] = xc; v[2] = xb; v[3] = xh;
+    title[0] = "scrambled: as a reverse-engineering leaves the diagram";
+    snprintf(t1, sizeof t1, "initial: neighbours&#8217; centroid, score %.6g", sc);
+    snprintf(t2, sizeof t2, "final: %s at seed 1, score %.6g", method, sb);
+    snprintf(t3, sizeof t3, "reference: the human&#8217;s accepted layout, score %.6g", sh);
+    title[1] = t1; title[2] = t2; title[3] = t3;
     printf("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 %g %g' "
            "font-family='sans-serif'>\n", W, H);
     printf("<rect width='%g' height='%g' fill='white'/>\n", W, H);
-    for (j = 0; j < 3; j++) {
+    for (j = 0; j < 4; j++) {
         double oy = (double)j * (g->ch + band);
         printf("<text x='%g' y='%g' text-anchor='middle' font-size='44' fill='#111'>"
                "%s</text>\n", W / 2, oy + 60, title[j]);
         printf("<g transform='translate(0,%g)'>\n", oy + band);
-        svg_panel(g, v[j], 5);
+        svg_panel(ge[j], v[j], 5);
         printf("</g>\n");
     }
     printf("</svg>\n");
@@ -463,10 +531,12 @@ int main(int argc, char **argv)
     double lo[64], hi[64], x[64], xh[64];
     long i, k, nnew, nv;
     int style;
-    int want_svg = argc == 2 && !strcmp(argv[1], "--svg");
+    int want_svg = 0;
 
-    if (argc > 1 && !want_svg) {
-        fprintf(stderr, "erd: --svg is the only option\n");
+    if (argc == 2 && !strcmp(argv[1], "--svg")) want_svg = 1;
+    else if (argc == 2 && !strcmp(argv[1], "--svg-straight")) want_svg = 2;
+    else if (argc > 1) {
+        fprintf(stderr, "erd: options are --svg and --svg-straight\n");
         return 2;
     }
 
@@ -483,6 +553,18 @@ int main(int argc, char **argv)
     }
     g.ne = ERD_NEDGE;
     for (i = 0; i < g.ne; i++) { g.e[i][0] = erd_edge[i][0]; g.e[i][1] = erd_edge[i][1]; }
+    /* Attachment slots: the j-th of a table's d edges leaves at fraction
+     * ((j+1)/(d+1) - 1/2) * 0.8 of the side, in edge order, deterministically. */
+    {
+        long deg[MAXN] = { 0 }, seen[MAXN] = { 0 };
+        for (i = 0; i < g.ne; i++) { deg[g.e[i][0]]++; deg[g.e[i][1]]++; }
+        for (i = 0; i < g.ne; i++) {
+            g.ofr0[i] = ((double)(seen[g.e[i][0]]++ + 1) / (double)(deg[g.e[i][0]] + 1)
+                         - 0.5) * 0.8;
+            g.ofr1[i] = ((double)(seen[g.e[i][1]]++ + 1) / (double)(deg[g.e[i][1]] + 1)
+                         - 0.5) * 0.8;
+        }
+    }
     g.konst = frozen_part(&g);
 
     nv = 2 * nnew;
@@ -502,7 +584,20 @@ int main(int argc, char **argv)
     /* The picture instead of the report: centroid, search, and the human's layout, one SVG to
      * stdout, computed exactly as below so the two never disagree. */
     if (want_svg) {
-        double xc[64], xb[64], sc, sh;
+        static Erd gs;
+        double xc[64], xb[64], xs[64], sc, sh;
+        Rng sr;
+        g.straight = want_svg == 2;
+        g.konst = frozen_part(&g);
+        /* the scrambled state: every table where a reverse-engineering drops it */
+        gs = g;
+        rng_seed(&sr, 42);
+        for (i = 0; i < gs.n; i++) {
+            double px = gs.w[i] / 2 + rng_uniform(&sr, 0, gs.cw - gs.w[i]);
+            double py = gs.h[i] / 2 + rng_uniform(&sr, 0, gs.ch - gs.h[i]);
+            if (i < gs.nfixed) { gs.x[i] = px; gs.y[i] = py; }
+            else { xs[2*(i - gs.nfixed)] = px; xs[2*(i - gs.nfixed) + 1] = py; }
+        }
         centroid_place(&g, xc);
         legal(xc, &g);
         sc = score(xc, &g);
@@ -512,7 +607,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "erd: search failed\n");
             return 1;
         }
-        svg_out(&g, xc, sc, xb, r.method, r.best, xh, sh);
+        svg_out(&g, &gs, xs, xc, sc, xb, r.method, r.best, xh, sh);
         return 0;
     }
 

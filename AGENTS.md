@@ -34,7 +34,7 @@ solved the 2001 problem was called a genetic algorithm and was in fact annealing
     make            # both examples
     make check      # ut + cliut -- the commit gate
     make ut         # unit suite, 60 checks: the library's contract, called as functions
-    make cliut      # black-box, 45 checks: the built examples through a shell
+    make cliut      # black-box, 48 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
@@ -102,10 +102,10 @@ and crossings at 100, connector length at 1, so length only ever breaks ties.
 Score the medium the reader sees. The ERD edges are routed orthogonally (L and Z shapes, the
 middle segment sliding across the channel) before anything is measured, because that is what
 the tool draws, and the router is calibrated against the one certain fact: the human's layout
-achieved 0 crossings and 0 penetration on screen. The run prints the router's shortfall (36
-and 422 at present), and no score comparison against the human means more than that line
-allows. Closing that gap, border anchors, more bends, routing aware of other routes, is the
-open problem the router owns.
+achieved 0 crossings and 0 penetration on screen. The run prints the router's shortfall (33
+and 491 at present, with border anchoring and per-edge attachment slots already in), and no
+score comparison against the human means more than that line allows. Closing that gap, more
+bends, routing aware of other routes, is the open problem the router owns.
 
 ## What is open, in the order to take it
 
@@ -138,10 +138,10 @@ open problem the router owns.
    means the objective is missing what the human optimizes. Treat the human score as a
    reference, not a target to beat.
 3. **The router**, until it reproduces the human layout's 0 crossings and 0 penetration. The
-   current one (two bends, center anchors, routes blind to each other) measures 36 and 422 on
-   that layout, and the run prints the number so nobody mistakes the floor for the human's.
-   In rising order of cost: anchor connectors on the facing table borders instead of centers;
-   more bends; route edges sequentially so each sees the ones already placed; a grid router.
+   current one (two bends, border anchors at per-edge attachment slots, routes blind to each
+   other) measures 33 and 491 on that layout, and the run prints the number so nobody
+   mistakes the floor for the human's. In rising order of cost: more bends; route edges
+   sequentially so each sees the ones already placed; a grid router.
    Every score comparison against the human sharpens exactly as fast as this number falls.
 4. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then

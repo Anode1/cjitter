@@ -89,48 +89,53 @@ above:
 
 Each edge model is calibrated against the one certain fact about the human's layout: it
 achieved zero crossings and zero edges under a table on screen. The straight model charges
-that clean screen 29 crossings and 1944 penetration; the routed model 36 and 422. Every
+that clean screen 20 crossings and 1944 penetration; the routed model 33 and 491. Every
 score means only as much as its calibration line, and the run prints both:
 
     34 tables already placed, 10 added by a migration, 59 foreign keys.
 
     ---- straight diagonal edges ----
 
-    centroid         251673   (place each new table at its neighbours' centroid)
-    human            231877   (where the human actually put them)
-               29 crossings, 1943.96 penetration under this edge model
+    centroid         226609   (place each new table at its neighbours' centroid)
+    human            218207   (where the human actually put them)
+               20 crossings, 1943.96 penetration under this edge model
 
     method         median        range    wins    sign-p   vs random
-    random         258611        23778       -         - the control
-    climb          126176      52628.2    5/5     0.0312      better
-    anneal         134884      55274.9    5/5     0.0312      better
-    ga            85123.4        16702    5/5     0.0312      better
+    random         233858      17935.1       -         - the control
+    climb          116506        39067    5/5     0.0312      better
+    anneal         104588      53550.5    5/5     0.0312      better
+    ga            72901.7      13540.3    5/5     0.0312      better
 
     ---- orthogonal routed connectors ----
 
-    centroid         207656   (place each new table at its neighbours' centroid)
-    human            131154   (where the human actually put them)
-               36 crossings, 422 penetration under this edge model
+    centroid         201247   (place each new table at its neighbours' centroid)
+    human            149519   (where the human actually put them)
+               33 crossings, 491 penetration under this edge model
 
     method         median        range    wins    sign-p   vs random
-    random         108472      37413.6       -         - the control
-    climb         58150.6      37085.2    5/5     0.0312      better
-    anneal        63407.2      20087.3    5/5     0.0312      better
-    ga            59542.6      25886.3    5/5     0.0312      better
+    random         109471      41766.5       -         - the control
+    climb         52639.3      7611.66    5/5     0.0312      better
+    anneal        48265.6        20042    5/5     0.0312      better
+    ga            42920.1      7632.14    5/5     0.0312      better
 
 All three searches beat the control on every seed under both models, and the heuristic loses
 under both: a table at its neighbours' centroid lands on the connectors running between its
 neighbours. Read the human rows through the calibration lines: most of the human's score in
 each section is that edge model failing to reproduce their real connectors, which is why even
 the control's median outscores them in the routed section. The comparison that survives is
-the feasibility pair. The routed seed-1 search layout reaches 0 penetration and 63 crossings;
-the human's routes to 422 and 36. Each is winning a different half of what the tool and the
+the feasibility pair. The routed seed-1 search layout reaches 0 penetration and 54 crossings;
+the human's routes to 491 and 33. Each is winning a different half of what the tool and the
 person jointly achieved as 0 and 0, and closing that gap is the router's open problem, not
-the search's.
+the search's. Connectors leave a table's border at that edge's own attachment point, spread
+by the table's degree, so no two connectors ever share a segment: an edge joins two tables
+and nothing else.
 
 Each section ends with the layout one run at seed 1 found and its feasibility under that
-model, pinned digit for digit by `tests/cli.sh`; `./erd --svg > erd.svg` draws the three
-states stacked with their actual routes, the frozen 34 identical in all three.
+model, pinned digit for digit by `tests/cli.sh`. `./erd --svg > erd.svg` draws four states
+stacked with their actual routes: the scramble a reverse-engineering leaves (the state that
+used to cost the hour), the centroid initial, the search's final, and the human's reference,
+the frozen 34 identical in the last three. `--svg-straight` draws the same four with straight
+edges.
 
 ## The objective
 
