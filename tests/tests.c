@@ -68,6 +68,19 @@ static double always_worst(const double *x, void *ctx)
     return HUGE_VAL;
 }
 
+/* A fitness that alternates a unit below and a unit above the sphere, so the smallest value
+ * ever observed at a point is a unit better than that point is worth. Deterministic, so the
+ * check below is exact rather than statistical: this is what a noisy objective does to the
+ * reported best, without needing noise to do it. */
+static double alternating(const double *x, void *ctx)
+{
+    Watch *w = ctx;
+    double f = 0;
+    long j;
+    for (j = 0; j < w->n; j++) f += x[j] * x[j];
+    return f + ((w->calls++ % 2) ? 1.0 : -1.0);
+}
+
 /* Records, per variable, whether it ever took a value other than the one it held at the first
  * point scored, and the largest number of variables any one proposal changed at once. Together
  * those are what a block claims: no proposal moves more than BLOCK of them, and the cursor
@@ -128,7 +141,7 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 100, 1, 0.1, 0 };
         double x[2];
-        cjitter_result r = { 0, x, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         cjitter_problem bad;
         cjitter_budget bb;
 
@@ -162,7 +175,7 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, always_worst, NULL, NULL };
         cjitter_budget b = { 50, 1, 0.1, 0 };
         double x[2] = { 12345.0, 67890.0 };
-        cjitter_result r = { 0, x, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("random", &p, &b, &r) == 0 &&
               x[0] >= lo2[0] && x[0] <= hi2[0] && x[1] >= lo2[1] && x[1] <= hi2[1],
               "a fitness stuck at HUGE_VAL still returns a scored in-box point");
@@ -183,7 +196,7 @@ int main(void)
                 cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
                 cjitter_budget b = { 0, 7, 0.1, 0 };
                 double x[2], y[2];
-                cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
+                cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
                 b.evals = budgets[bi];
                 if (cjitter_run(name, &p, &b, &r) != 0) { exact = 0; break; }
                 if (w.calls != budgets[bi] || r.evals != budgets[bi]) exact = 0;
@@ -219,7 +232,7 @@ int main(void)
             cjitter_problem p = { 2, lo2, hi2, watched_sphere, floor_first, &w };
             cjitter_budget b = { 400, 3, 0.2, 0 };
             double x[2];
-            cjitter_result r = { 0, x, 0, 0, NULL };
+            cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
             if (cjitter_run(cjitter_methods[m], &p, &b, &r) != 0 || w.unrepaired) held = 0;
             if (x[0] < 0.5) returned = 0;
         }
@@ -237,10 +250,10 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 300, 9, 0.1, 0 };
         cjitter_tuning dflt = cjitter_tuning_default(2);
-        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         cjitter_tuning bad;
         double x[2], y[2];
-        cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
         CHECK(dflt.climb_patience == 60, "tuning_default: patience is 40 + 10n");
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 &&
               cjitter_run_tuned("climb", &p, &b, &dflt, &r2) == 0 &&
@@ -290,7 +303,7 @@ int main(void)
         cjitter_tuning dflt = cjitter_tuning_default(8);
         cjitter_tuning t;
         double x[8], y[8];
-        cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
         long m;
 
         CHECK(dflt.block == 8, "block: the default is n, the whole vector");
@@ -313,7 +326,7 @@ int main(void)
         for (m = 0; cjitter_methods[m]; m++) {
             Watch wr = { lo8, hi8, 8, 0, 0, 0, 1, HUGE_VAL };
             cjitter_problem pr = { 8, lo8, hi8, watched_sphere, floor_first, &wr };
-            cjitter_result rr = { 0, x, 0, 0, NULL };
+            cjitter_result rr = { 0, x, 0, 0, NULL, 0, 0, 0 };
             t = dflt; t.block = 1;
             if (cjitter_run_tuned(cjitter_methods[m], &pr, &b, &t, &rr) != 0 ||
                 rr.evals != b.evals || wr.calls != b.evals || wr.outside || wr.unrepaired)
@@ -330,7 +343,7 @@ int main(void)
         {
             Moves mv;
             cjitter_problem pm = { 8, lo8, hi8, moves_probe, NULL, &mv };
-            cjitter_result rm = { 0, x, 0, 0, NULL };
+            cjitter_result rm = { 0, x, 0, 0, NULL, 0, 0, 0 };
             long j, all = 1;
             memset(&mv, 0, sizeof mv);
             mv.n = 8;
@@ -348,7 +361,7 @@ int main(void)
             static const double hi5[5] = {  5,  5,  5,  5,  5 };
             Moves mv;
             cjitter_problem pm = { 5, lo5, hi5, moves_probe, NULL, &mv };
-            cjitter_result rm = { 0, x, 0, 0, NULL };
+            cjitter_result rm = { 0, x, 0, 0, NULL, 0, 0, 0 };
             cjitter_tuning t5 = cjitter_tuning_default(5);
             memset(&mv, 0, sizeof mv);
             mv.n = 5;
@@ -356,6 +369,78 @@ int main(void)
             CHECK(cjitter_run_tuned("climb", &pm, &b, &t5, &rm) == 0 && rm.evals == b.evals &&
                   mv.moved[4] && mv.widest <= 4,
                   "block: a short last block is reached, so no variable is left behind");
+        }
+    }
+
+    /* verify: the honest number. The smallest value a run OBSERVES is the luckiest draw it
+     * took, and how much luck that carries differs by method, so on a noisy objective a panel
+     * of reported bests is not a fair comparison. verify re-evaluates the RETURNED point and
+     * reports the mean. The checks: it is off by default and refused when negative; it costs
+     * evaluations that do NOT come out of the search budget, so switching it on cannot shorten
+     * a search; on a deterministic fitness it is exactly inert, which is what makes it safe to
+     * leave on; and on a fitness whose observations differ from the point's worth it recovers
+     * the difference, which is the whole point. */
+    {
+        static const double lo3[3] = { -2, -2, -2 }, hi3[3] = { 2, 2, 2 };
+        Watch w = { lo3, hi3, 3, 0, 0, 0, 0, HUGE_VAL };
+        cjitter_problem p = { 3, lo3, hi3, watched_sphere, NULL, &w };
+        cjitter_budget b = { 300, 5, 0.1, 0 };
+        cjitter_tuning dflt = cjitter_tuning_default(3);
+        cjitter_tuning t;
+        double x[3];
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
+
+        CHECK(dflt.verify == 0, "verify: off by default, so no existing result moves");
+        t = dflt; t.verify = -1;
+        w.calls = 0;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &t, &r) == -1 && w.calls == 0,
+              "verify: a negative count is refused, before any evaluation");
+
+        w.calls = 0;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &dflt, &r) == 0 &&
+              r.verified == r.best && r.inflation == 0 && r.verify_evals == 0 &&
+              w.calls == b.evals,
+              "verify: at 0 the honest fields mirror best and nothing extra is spent");
+
+        t = dflt; t.verify = 25;
+        w.calls = 0;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &t, &r) == 0 &&
+              r.verified == r.best && r.inflation == 0 && r.verify_evals == 25,
+              "verify: on a deterministic fitness it is exactly inert");
+        CHECK(r.evals == b.evals && w.calls == b.evals + 25,
+              "verify: its evaluations are extra, so the search budget is untouched");
+
+        /* The case it exists for: observations that differ from what the point is worth. */
+        {
+            Watch wa = { lo3, hi3, 3, 0, 0, 0, 0, HUGE_VAL };
+            cjitter_problem pa = { 3, lo3, hi3, alternating, NULL, &wa };
+            cjitter_result ra = { 0, x, 0, 0, NULL, 0, 0, 0 };
+            t = dflt; t.verify = 40;
+            CHECK(cjitter_run_tuned("climb", &pa, &b, &t, &ra) == 0 &&
+                  ra.verify_evals == 40 && ra.inflation > 0.5 &&
+                  ra.verified > ra.best,
+                  "verify: it recovers the gap between the luckiest draw and the point's worth");
+        }
+
+        /* compare judges on the verified value when the caller paid for it, and says so. */
+        {
+            FILE *tf = tmpfile();
+            long saw_col = 0, saw_note = 0;
+            if (tf) {
+                char line[512];
+                t = dflt; t.verify = 8;
+                if (cjitter_compare_tuned(&p, &b, &t, 3, tf) == 0) {
+                    rewind(tf);
+                    while (fgets(line, sizeof line, tf))
+                        if (strstr(line, "inflation")) saw_col++;
+                    rewind(tf);
+                    while (fgets(line, sizeof line, tf))
+                        if (strstr(line, "fresh evaluations")) saw_note++;
+                }
+                fclose(tf);
+            }
+            CHECK(saw_col >= 1 && saw_note == 1,
+                  "verify: compare reports the inflation column and what it judged on");
         }
     }
 
@@ -369,8 +454,8 @@ int main(void)
         cjitter_budget b = { 200, 11, 0.1, 0 };
         cjitter_budget bb;
         double x[2], y[2], z2[2];
-        cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
-        cjitter_result r3 = { 0, z2, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
+        cjitter_result r3 = { 0, z2, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 &&
               cjitter_run("auto", &p, &b, &r2) == 0 &&
               cjitter_run(NULL, &p, &b, &r3) == 0 &&
@@ -394,7 +479,7 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 50, 0, 0.1, 0 };
         double x[2], y[2];
-        cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("random", &p, &b, &r) == 0 &&
               cjitter_run("random", &p, &b, &r2) == 0 && r.best == r2.best,
               "seed 0 runs and reproduces, not a degenerate stream");
@@ -407,7 +492,7 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 10, 1, 0.1, 1000 };
         double x[2];
-        cjitter_result r = { 0, x, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("ga", &p, &b, &r) == 0 && w.calls == 10,
               "ga: a population larger than the budget is clamped, budget still exact");
     }
@@ -420,7 +505,7 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 5000, 1, 0.1, 0 };
         double x[2];
-        cjitter_result r = { 0, x, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 && r.best < 1e-6,
               "climb: reaches the sphere optimum in 5000 evaluations");
         CHECK(r.restarts > 0 && r.evals == 5000,
@@ -439,7 +524,7 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 5000, 160, 0.1, 0 };
         double x[2];
-        cjitter_result r = { 0, x, 0, 0, NULL };
+        cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 && w.calls == 5000 && r.evals == 5000,
               "climb: a restart on the last evaluation does not spend 5001");
         CHECK(r.restarts == 7,

@@ -42,7 +42,7 @@ plus noise is jitter, which is why the name fits the whole family.
     make            # both examples
     make lib        # libcjitter.a; install/uninstall honor PREFIX (default /usr/local)
     make check      # ut + cliut -- the commit gate
-    make ut         # unit suite, 74 checks: the library's contract, called as functions
+    make ut         # unit suite, 81 checks: the library's contract, called as functions
     make cliut      # black-box, 61 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
@@ -129,6 +129,46 @@ and 323 at present, with border anchoring, per-edge attachment slots, and sequen
 aware of every connector already placed), and no score comparison against the human means
 more than that line allows. Closing the remainder, more bends and a grid router, is the open
 problem the router owns.
+
+## The noisy objective, and the verdict it manufactured
+
+The third burial, and the worst of them, because it was in the verdict rather than beside it.
+`keep` stores the smallest fitness OBSERVED. On a deterministic objective that is the value of
+the returned point. On a noisy one it is the minimum of however many draws the search took near
+that point, which is biased low, and the bias is not shared equally: on a sphere in ten
+variables at noise sigma 20 and budget 4000, climb takes 559 of its evaluations within half a
+unit of the point it returns and anneal 317, where random takes 1. The method that resamples
+hardest collects the most luck, and resampling is what distinguishes the methods.
+
+Measured on that sphere, 9 seeds, judged as the library judged it before 0.11.0 and then on the
+noiseless value of the same returned points:
+
+    method    reported            on what was actually delivered
+    climb     9/9, p = 0.0020     7/9, p = 0.0898   not shown
+    anneal    9/9, p = 0.0020     5/9, p = 0.5000   not shown
+    ga        9/9, p = 0.0020     9/9, p = 0.0020   better
+
+So the library whose reason for existing is to say when a search did no better than sampling
+said "better" at p = 0.002 for two methods that had not. It also reported a median of -37 for a
+function whose minimum is 0, and said nothing about that either.
+
+`cjitter_tuning.verify` is the fix: n fresh evaluations of the RETURNED point, spent after the
+search and not against the budget, whose running mean becomes `result.verified`, with
+`result.inflation` the gap. compare judges on verified when it is set. At verify 30 the three
+verdicts above come back to 0.0898, 0.5000 and 0.0020, matching the truth exactly.
+
+Three things the implementation had to get right, each learned by a test failing. The
+verification evaluations must not go through `score()`, whose budget guard would abort. The
+mean must be a RUNNING mean, because summing k copies of a value and dividing by k does not
+return that value (0.1 added 25 times is not 2.5) and the promise that the check is inert on a
+deterministic fitness has to be exact. And the field belongs in the tuning, not the budget:
+`cjitter_tuning` must come from `cjitter_tuning_default`, where a budget is routinely filled
+field by field, so a field added to the budget is uninitialised garbage in every caller that
+already exists. The cli suite caught that one within a minute of the first build.
+
+This is the prerequisite for QUESTIONS.md item 1 next door. A sweep for the noise level at
+which search stops beating random, run through an estimator whose bias is created by that same
+noise, would have measured its own artifact.
 
 ## The repair, and why it is the thing to check first
 

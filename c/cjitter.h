@@ -32,9 +32,9 @@
 
 /* The library's version, bumped only when the interface or a method's trajectory changes:
  * either one changes what a seed reproduces. */
-#define CJITTER_VERSION "0.10.0"
+#define CJITTER_VERSION "0.11.0"
 #define CJITTER_VERSION_MAJOR 0
-#define CJITTER_VERSION_MINOR 10
+#define CJITTER_VERSION_MINOR 11
 #define CJITTER_VERSION_PATCH 0
 
 /* Lower is better. CTX is yours, untouched. */
@@ -86,7 +86,14 @@ typedef struct {
  * existing seed reproduces. It is not free: on a genuinely coupled objective, where the good
  * moves are the ones that adjust several objects together, a small block cannot express them.
  * Measure it against block = n with cjitter_compare, the way you would measure any other
- * method. */
+ * method.
+ *
+ * verify buys an honest number out of a noisy objective; the cjitter_result comment says what
+ * goes wrong without it. It lives here rather than in the budget for two reasons. A tuning is
+ * already part of a result's identity, and two runs verified differently do not compare. And
+ * a tuning must come from cjitter_tuning_default, where a budget is routinely filled field by
+ * field, so a field added here is initialised for every caller who follows the contract and a
+ * field added there would have been uninitialised for every caller who already exists. */
 typedef struct {
     long   climb_patience;    /* >= 1; rejections before the move size shrinks              */
     double climb_shrink;      /* in (0, 1); the shrink factor                               */
@@ -97,21 +104,53 @@ typedef struct {
     double ga_mutate;         /* >= 0; mutation move size as a fraction of jitter           */
     double ga_mutate_decay;   /* in [0, 1]; mutation-size fraction removed over the run     */
     long   block;             /* >= 1; variables one proposal moves; n or more moves all    */
+    long   verify;            /* >= 0; fresh evaluations of the RETURNED point, spent after
+                                 the search and NOT against the budget; 0 disables         */
 } cjitter_tuning;
 
 /* The shipped constants: patience 40 + 10n, shrink 0.5, restart at 1/64, 20 probes,
- * cooling ln 1e-3, move decay 0.9, mutation 0.3 of jitter decaying by 0.9, block n. N is the
+ * cooling ln 1e-3, move decay 0.9, mutation 0.3 of jitter decaying by 0.9, block n, verify 0.
+ * N is the
  * problem's variable count, which the patience and block defaults scale with, so a tuning
  * taken for one n and used at another is a different tuning: block would no longer cover the
  * vector. */
 cjitter_tuning cjitter_tuning_default(long n);
 
+/* BEST is the smallest fitness OBSERVED during the run, which is what every optimiser reports
+ * and what this one reported alone until 0.11.0. On a deterministic objective that is the
+ * fitness of the point returned and there is nothing more to say. On a NOISY one it is not:
+ * it is the luckiest draw the search happened to take, and the search is the thing that went
+ * looking for lucky draws. Worse, the size of that luck depends on how much a method resamples
+ * one place, which is exactly what distinguishes the methods being compared -- on a sphere in
+ * ten variables at noise sigma 20, climbing takes 559 of its 4000 evaluations within half a
+ * unit of the point it finally returns and annealing 317, where uniform sampling takes one, so
+ * their reported bests carry very different amounts of luck. cjitter_compare has declared
+ * "better" at p = 0.002 for a method that, judged on what it actually delivered, was 7 wins in
+ * 9 and not shown.
+ *
+ * Set tuning.verify > 0 and VERIFIED holds the mean of that many fresh evaluations at the
+ * returned point: an estimate of what the search delivered, made from draws the search could
+ * not select on. INFLATION is verified - best, the luck. Both equal best and 0 when the
+ * fitness is deterministic, whatever verify is, so the check costs nothing but evaluations and
+ * is self-evidently inert where it is not needed.
+ *
+ * The verification evaluations are spent AFTER the search and are not deducted from evals, so
+ * turning verify on does not shorten the search or move any trajectory; VERIFY_EVALS reports
+ * what they cost. cjitter_compare judges on verified whenever verify > 0. */
 typedef struct {
-    double      best;    /* the fitness found */
+    double      best;    /* the smallest fitness observed; see above before trusting it */
     double     *x;       /* the point, n values, owned by the caller */
     long        evals;   /* actually spent */
     long        restarts;
     const char *method;  /* points into cjitter_methods: static storage, never freed */
+    /* Added in 0.11.0 at the END, so an existing positional initialiser still puts every value
+     * in the field it meant. Under -Wextra such an initialiser now warns that these three are
+     * missing, which is the compiler telling you the struct grew rather than anything being
+     * wrong; `cjitter_result r = { 0 };` and then setting r.x is the form that stays quiet
+     * through this addition and the next. */
+    double      verified;     /* mean of verify fresh evaluations at x; best when verify = 0 */
+    double      inflation;    /* verified - best: how much of best was luck; 0 when verify = 0 */
+    long        verify_evals; /* what the verification cost, over and above evals */
 } cjitter_result;
 
 /* METHOD is "random", "climb", "anneal" or "ga"; NULL or "auto" takes the default, currently

@@ -8,7 +8,8 @@ feasibility before it is scored. One call optimizes it:
 
     cjitter_problem p = { n, lo, hi, my_fitness, my_repair, ctx };
     cjitter_budget  b = { 8000, 1, 0.1, 0 };   /* evals, seed, first move size, pop */
-    cjitter_result  r = { 0, best, 0, 0, 0 };  /* best: your array of n doubles */
+    cjitter_result  r = { 0 };                 /* zero it; x is the one field you set */
+    r.x = best;                                /* your array of n doubles */
     cjitter_run("climb", &p, &b, &r);
 
 No dependencies beyond libm. Deterministic from a seed on every platform. `make lib` builds
@@ -79,6 +80,33 @@ table read "ga 195.6 against random's 187.0": no better than uniform sampling at
 An outside review traced that verdict to the fixed scale; the mutation now decays over the
 run, and the same GA is the best method on the problem. Both halves of that story are the
 library working as intended.
+
+## When the objective is noisy
+
+If your fitness returns a slightly different number each time it is called — a held-out error
+from a training run, a simulation, anything sampled — then the smallest value a search
+observes is not what the search found. It is the luckiest draw it took, and the search is the
+thing that went looking for lucky draws.
+
+That is not a small correction and it is not fair across methods, because how much luck a
+method accumulates depends on how much it resamples one place, which is exactly what
+distinguishes the methods being compared. Set `verify` in the tuning and the result carries
+`verified`, the mean of that many fresh evaluations of the point actually returned, along with
+`inflation`, the gap between the two. `cjitter_compare` then judges on `verified` and prints
+the inflation beside each method.
+
+    cjitter_tuning t = cjitter_tuning_default(n);
+    t.verify = 30;                       /* 30 fresh evaluations of the answer */
+    cjitter_compare_tuned(&p, &b, &t, seeds, stdout);
+
+The verification evaluations are spent after the search and are not taken out of the budget,
+so switching it on cannot shorten a search or move a trajectory. On a deterministic fitness
+every draw is the same value and `verified` equals `best` exactly, so leaving it on costs
+evaluations and changes nothing else. It is off by default.
+
+`cjitter.h` gives the measurement behind this at the `cjitter_result` comment, including the
+case where this library declared a method better at p = 0.002 that had not, in fact, beaten
+the control.
 
 ## The examples
 

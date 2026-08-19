@@ -38,6 +38,7 @@ cjitter_tuning cjitter_tuning_default(long n)
     t.ga_mutate         = GA_MUTATE;
     t.ga_mutate_decay   = GA_MUTATE_DECAY;
     t.block             = n > 0 ? n : 1;   /* the whole vector: today's trajectories */
+    t.verify            = 0;               /* off: report the smallest observation */
     return t;
 }
 
@@ -52,7 +53,8 @@ static int tuning_ok(const cjitter_tuning *t)
            t->anneal_move_decay >= 0 && t->anneal_move_decay <= 1 &&
            t->ga_mutate >= 0 &&
            t->ga_mutate_decay >= 0 && t->ga_mutate_decay <= 1 &&
-           t->block >= 1;
+           t->block >= 1 &&
+           t->verify >= 0;
 }
 
 /* Scratch for one run. Allocated once here, so no search step allocates. */
@@ -348,6 +350,31 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
     out->restarts = restarts;
     out->method = cjitter_methods[mi];   /* never the caller's pointer, which may not outlive us */
     if (out->x) memcpy(out->x, R.best, (size_t)p->n * sizeof *out->x);
+
+    /* What the search delivered, as opposed to the luckiest thing it saw. These evaluations are
+     * made at the point being returned, after the search, through the caller's fitness directly
+     * rather than through score(): they are deliberately outside the budget, so switching
+     * verification on cannot shorten a search or move a trajectory. On a deterministic fitness
+     * every draw equals bestf, so verified == best and inflation == 0 exactly. */
+    out->verified = R.bestf;
+    out->inflation = 0;
+    out->verify_evals = 0;
+    if (R.tun.verify > 0 && R.has_best) {
+        /* A running mean, not a sum divided at the end: on a deterministic fitness every draw
+         * is the same value and this returns it EXACTLY, where summing k copies and dividing
+         * by k does not (0.1 added 25 times is not 2.5). That exactness is what lets the
+         * header promise the check is inert where it is not needed, and it is the same
+         * streaming form linearr's five-line least squares uses. */
+        double m = 0;
+        long v;
+        for (v = 0; v < R.tun.verify; v++) {
+            double f = p->fitness(R.best, p->ctx);
+            m += (f - m) / (double)(v + 1);
+        }
+        out->verified = m;
+        out->inflation = m - R.bestf;
+        out->verify_evals = R.tun.verify;
+    }
     rc = 0;
 done:
     free(R.x); free(R.cand); free(R.best); free(R.fit); free(R.pop);
@@ -385,7 +412,9 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
                           const cjitter_tuning *t, long seeds, void *stream)
 {
     FILE *f = stream ? (FILE *)stream : stdout;
-    double *sc = NULL, *v = NULL;
+    double *sc = NULL, *v = NULL, *inf = NULL;
+    cjitter_tuning eff;
+    long verify;
     uint32_t base;
     long m, s, nm = 0;
     int rc = -1;
@@ -394,10 +423,13 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
      * about a thousand the exact tests' doubles stop being exact. A thousand seeds is
      * beyond any panel this comparison is for. */
     if (!p || !b || seeds < 1 || seeds > 1000) return -1;
+    eff = t ? *t : cjitter_tuning_default(p->n);
+    verify = eff.verify;
     while (cjitter_methods[nm]) nm++;
     sc = malloc((size_t)nm * (size_t)seeds * sizeof *sc);
     v  = malloc((size_t)seeds * sizeof *v);
-    if (!sc || !v) goto done;
+    inf = malloc((size_t)nm * (size_t)seeds * sizeof *inf);
+    if (!sc || !v || !inf) goto done;
 
     /* The same seed panel for every method, based on the caller's seed, so the per-seed
      * differences below are paired and a fresh panel is one seed away. */
@@ -409,11 +441,17 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
             memset(&r, 0, sizeof r);
             bb.seed = base + COMPARE_SEED_STEP * (uint32_t)s;
             if (cjitter_run_tuned(cjitter_methods[m], p, &bb, t, &r) != 0) goto done;
-            sc[m * seeds + s] = r.best;
+            /* Judge on what the search delivered when the caller paid to find that out. The
+             * smallest observation is the luckiest draw, and how much luck it carries differs
+             * by method, so a panel of them is not a fair comparison on a noisy objective. */
+            sc[m * seeds + s] = verify > 0 ? r.verified : r.best;
+            inf[m * seeds + s] = r.inflation;
         }
 
-    fprintf(f, "%-8s %12s %12s %7s %9s %11s\n",
-            "method", "median", "range", "wins", "sign-p", "vs random");
+    fprintf(f, "%-8s %12s %12s %7s %9s %11s", "method",
+            verify > 0 ? "median(ver)" : "median", "range", "wins", "sign-p", "vs random");
+    if (verify > 0) fprintf(f, " %12s", "inflation");
+    fprintf(f, "\n");
     for (m = 0; m < nm; m++) {
         double med, range;
         memcpy(v, sc + m * seeds, (size_t)seeds * sizeof *v);
@@ -421,7 +459,7 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
         med = v[(seeds - 1) / 2];
         range = v[seeds - 1] - v[0];
         if (m == 0) {
-            fprintf(f, "%-8s %12.6g %12.6g %7s %9s %11s\n",
+            fprintf(f, "%-8s %12.6g %12.6g %7s %9s %11s",
                     cjitter_methods[m], med, range, "-", "-", "the control");
         } else {
             /* Wins on the paired per-seed differences; a tie counts for neither side. */
@@ -433,20 +471,34 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
                 if (sc[m * seeds + s] < sc[s]) wins++;
             }
             pval = n > 0 ? sign_p(wins, n) : 1.0;
-            fprintf(f, "%-8s %12.6g %12.6g %4ld/%-2ld %9.3g %11s\n",
+            fprintf(f, "%-8s %12.6g %12.6g %4ld/%-2ld %9.3g %11s",
                     cjitter_methods[m], med, range, wins, n, pval,
                     pval <= 0.05 ? "better" : "not shown");
         }
+        if (verify > 0) {
+            memcpy(v, inf + m * seeds, (size_t)seeds * sizeof *v);
+            qsort(v, (size_t)seeds, sizeof *v, cmpd);
+            fprintf(f, " %12.6g", v[(seeds - 1) / 2]);
+        }
+        fprintf(f, "\n");
     }
     fprintf(f, "\n%ld seeds at %ld evaluations each, every method on the same seeds. A method\n"
                "is better when it beats the control on enough of them that a fair coin explains\n"
                "it with probability at most 5%% (the sign-p column, an exact one-sided sign\n"
                "test on the paired per-seed differences). not shown is a failure to demonstrate\n"
                "improvement, and says nothing about equality.\n", seeds, b->evals);
+    if (verify > 0)
+        fprintf(f, "Judged on the mean of %ld fresh evaluations of each returned point, not on\n"
+                   "the smallest value seen, which on a noisy objective is the luckiest draw the\n"
+                   "search took and carries more luck for a method that resamples one place.\n"
+                   "inflation is that luck: the median of verified minus reported, per method.\n"
+                   "Those evaluations are extra and are not part of the %ld above.\n",
+                verify, b->evals);
     rc = 0;
 done:
     free(sc);
     free(v);
+    free(inf);
     return rc;
 }
 
