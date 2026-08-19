@@ -19,7 +19,11 @@
 
 #define MAXKEY 512
 #define STEP   22.0   /* canvas units of the largest table move per film frame */
-#define MAXF   420    /* frame budget; tweens scale down proportionally to fit */
+#define MAXF   210    /* frame budget; tweens scale down proportionally to fit. Sized for the
+                       * reader, not the search: at 25 frames a second this is about eight
+                       * seconds of motion, and a film nobody watches to the end shows nothing.
+                       * The floor is one frame per improvement, so a run with many more
+                       * improvements than this gets a jumpier film rather than a longer one. */
 
 static struct {
     long   nkey, calls;

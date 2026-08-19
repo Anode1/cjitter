@@ -54,13 +54,18 @@ sixty: example/sixty/sixty.c $(OBJ) $(HEADERS)
 # The search watched: climb settling the migration's tables into the frozen diagram, a
 # smoothed replay of its improvements. The README's moving figure. Not part of check: it
 # needs rsvg-convert and ImageMagick, and its output is a committed fixture.
+#
+# Length is a deliberate constraint, not a by-product: about ten seconds, roughly eight of
+# motion at 33 frames a second and two and a half holding the final layout. A README figure
+# competes with the reader's scroll, and erd_movie.c's MAXF is the other half of the budget.
+# Delays below 3 hundredths are not worth trying; browsers clamp them.
 movie: example/erd/erd_movie.c example/erd/erd.c $(OBJ) $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o erd_movie example/erd/erd_movie.c $(OBJ) $(LIBM) $(LDLIBS)
 	rm -rf movie_frames && mkdir movie_frames
 	./erd_movie movie_frames
 	for f in movie_frames/frame*.svg; do rsvg-convert -w 640 "$$f" -o "$${f%.svg}.png"; done
-	convert -delay 4 -loop 0 movie_frames/frame*.png \
-	        \( +clone -set delay 400 \) +swap +delete -layers Optimize example/erd/erd_settle.gif
+	convert -delay 3 -loop 0 movie_frames/frame*.png \
+	        \( +clone -set delay 250 \) +swap +delete -layers Optimize example/erd/erd_settle.gif
 	rm -rf movie_frames erd_movie
 	@echo "example/erd/erd_settle.gif rebuilt"
 
