@@ -3,7 +3,8 @@
  *
  * Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
  *
- * Keyframes are the improvements of the best layout so far, at the shipped budget and seed.
+ * Keyframes are the improvements of the best layout so far, at the shipped budget and seed,
+ * with cjitter_tuning.block set to 2 so each proposal moves one table.
  * The search moves in jumps; the frames between keyframes are linear interpolation, so the
  * film is a smoothed replay of the real trajectory, not the trajectory itself, and says so
  * here. Connectors are re-routed at every frame, so the reader watches the routing give way
@@ -62,7 +63,8 @@ static void frame(const char *dir, long idx, const Erd *g, const double *v,
            "font-family='sans-serif'>\n", g->cw + 10, g->ch + 90);
     printf("<rect width='%g' height='%g' fill='white'/>\n", g->cw + 10, g->ch + 90);
     printf("<text x='%g' y='52' text-anchor='middle' font-size='40' fill='#111'>"
-           "climb, evaluation %ld, best %.6g</text>\n", (g->cw + 10) / 2, eval, sc);
+           "climb, one table per proposal: evaluation %ld, best %.6g</text>\n",
+           (g->cw + 10) / 2, eval, sc);
     printf("<g transform='translate(0,80)'>\n");
     svg_panel(g, v, 5);
     printf("</g>\n</svg>\n");
@@ -75,6 +77,7 @@ int main(int argc, char **argv)
     static Erd g;
     cjitter_problem p;
     cjitter_budget b;
+    cjitter_tuning tun;
     cjitter_result r;
     double lo[64], hi[64], x[64], v[64];
     long i, k, nnew, nv, nf = 0, key, t;
@@ -109,9 +112,15 @@ int main(int argc, char **argv)
     }
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = traced; p.repair = legal; p.ctx = &g;
     b.evals = EVALS; b.seed = 1; b.jitter = JITTER; b.pop = POP;
+    /* One table per proposal. The film exists to show the search working, and at the default
+     * block every proposal displaces all ten tables at once, so the reader watches the whole
+     * migration teleport on each of the 47 acceptances instead of tables finding their
+     * neighbours. cjitter.h's tuning comment says why this is the better search as well. */
+    tun = cjitter_tuning_default(nv);
+    tun.block = 2;
 
     r.x = x;
-    if (cjitter_run("climb", &p, &b, &r) != 0) {
+    if (cjitter_run_tuned("climb", &p, &b, &tun, &r) != 0) {
         fprintf(stderr, "erd_movie: run failed\n");
         return 1;
     }

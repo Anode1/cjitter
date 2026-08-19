@@ -32,9 +32,9 @@
 
 /* The library's version, bumped only when the interface or a method's trajectory changes:
  * either one changes what a seed reproduces. */
-#define CJITTER_VERSION "0.9.0"
+#define CJITTER_VERSION "0.10.0"
 #define CJITTER_VERSION_MAJOR 0
-#define CJITTER_VERSION_MINOR 9
+#define CJITTER_VERSION_MINOR 10
 #define CJITTER_VERSION_PATCH 0
 
 /* Lower is better. CTX is yours, untouched. */
@@ -70,7 +70,23 @@ typedef struct {
  *
  * anneal_cool_ln is the natural log of the temperature's total decay; pass a literal rather
  * than log(x) if runs must reproduce across platforms, because log is not correctly rounded
- * and one ulp moves the trajectory. */
+ * and one ulp moves the trajectory.
+ *
+ * block is how many variables one proposal may move. The blocks tile the vector in order and
+ * cycle, one per proposal, so climb, anneal and the ga's mutation all step through the
+ * problem a block at a time. Anything at or above n moves the whole vector, which is the
+ * default and what every result in README.md was measured at.
+ *
+ * Set it to the width of one object -- 2 for a point in the plane -- when the objective is a
+ * sum over objects that interact weakly. A whole-vector proposal that improves one object and
+ * spoils another is rejected for the spoiling, so on a nearly separable problem a search that
+ * moves everything at once can stall where one that moves a block at a time walks straight
+ * down. That is the mechanism this library is named after and it can be worth an order of
+ * magnitude in budget; it is not the default only because the default must not change what an
+ * existing seed reproduces. It is not free: on a genuinely coupled objective, where the good
+ * moves are the ones that adjust several objects together, a small block cannot express them.
+ * Measure it against block = n with cjitter_compare, the way you would measure any other
+ * method. */
 typedef struct {
     long   climb_patience;    /* >= 1; rejections before the move size shrinks              */
     double climb_shrink;      /* in (0, 1); the shrink factor                               */
@@ -80,11 +96,14 @@ typedef struct {
     double anneal_move_decay; /* in [0, 1]; move-size fraction the cooling removes          */
     double ga_mutate;         /* >= 0; mutation move size as a fraction of jitter           */
     double ga_mutate_decay;   /* in [0, 1]; mutation-size fraction removed over the run     */
+    long   block;             /* >= 1; variables one proposal moves; n or more moves all    */
 } cjitter_tuning;
 
 /* The shipped constants: patience 40 + 10n, shrink 0.5, restart at 1/64, 20 probes,
- * cooling ln 1e-3, move decay 0.9, mutation 0.3 of jitter decaying by 0.9. N is the
- * problem's variable count, which the patience default scales with. */
+ * cooling ln 1e-3, move decay 0.9, mutation 0.3 of jitter decaying by 0.9, block n. N is the
+ * problem's variable count, which the patience and block defaults scale with, so a tuning
+ * taken for one n and used at another is a different tuning: block would no longer cover the
+ * vector. */
 cjitter_tuning cjitter_tuning_default(long n);
 
 typedef struct {
@@ -95,10 +114,13 @@ typedef struct {
     const char *method;  /* points into cjitter_methods: static storage, never freed */
 } cjitter_result;
 
-/* METHOD is "random", "climb", "anneal" or "ga"; NULL or "auto" takes the default, the
- * method the shipped benchmarks rank most budget-efficient (currently climb), tied to
- * CJITTER_VERSION because changing it changes what a seed reproduces. OUT->x must have room
- * for n doubles. Returns 0, or -1 on a bad argument or an allocation failure. cjitter_run
+/* METHOD is "random", "climb", "anneal" or "ga"; NULL or "auto" takes the default, currently
+ * climb, tied to CJITTER_VERSION because changing it changes what a seed reproduces. That
+ * choice comes from the eight-migration layout benchmark, where climb separates from the
+ * control on seven of eight instances and the ga does not separate at all; it is not the
+ * ranking of the two examples in README.md, where the ga's median wins at the default block.
+ * A default is a guess about somebody else's problem, so measure yours with cjitter_compare
+ * rather than inherit this one. OUT->x must have room for n doubles. Returns 0, or -1 on a bad argument or an allocation failure. cjitter_run
  * takes the default tuning; the _tuned variant takes an explicit one, where NULL means the
  * same defaults. */
 int cjitter_run(const char *method, const cjitter_problem *p, const cjitter_budget *b,

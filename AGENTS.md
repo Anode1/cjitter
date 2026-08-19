@@ -42,8 +42,8 @@ plus noise is jitter, which is why the name fits the whole family.
     make            # both examples
     make lib        # libcjitter.a; install/uninstall honor PREFIX (default /usr/local)
     make check      # ut + cliut -- the commit gate
-    make ut         # unit suite, 65 checks: the library's contract, called as functions
-    make cliut      # black-box, 48 checks: the built examples through a shell
+    make ut         # unit suite, 74 checks: the library's contract, called as functions
+    make cliut      # black-box, 59 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
@@ -112,7 +112,14 @@ follow and walks at random on the plateau. Where a count is unavoidable, add a c
 nearness term beside it.
 
 Tier the weights by orders of magnitude rather than tuning them. In the ERD example: penetration
-and crossings at 100, connector length at 1, so length only ever breaks ties.
+and crossings at 100, connector length at 1.
+
+Then check what the tiers weigh at the answer, because a weight is not a magnitude. This
+objective was documented as one where "length only ever breaks ties", and that is true of the
+human's layout and false of every layout a search returns: the searches drive penetration to
+zero, and what is left is a few dozen crossings at 100 against sixty connectors of a few
+hundred units each, so length is 81 to 90 percent of everything that varies and the answer is
+the one length prefers. The decomposition is cheap to print and nobody printed it for a year.
 
 Score the medium the reader sees. The ERD edges are routed orthogonally (L and Z shapes, the
 middle segment sliding across the channel) before anything is measured, because that is what
@@ -153,17 +160,66 @@ problem the router owns.
    learned from the one shipped pair: under this objective the searches beat the human, which
    means the objective is missing what the human optimizes. Treat the human score as a
    reference, not a target to beat.
-3. **The router**, until it reproduces the human layout's 0 crossings and 0 penetration. The
+3. **The block, and what it re-opens.** `cjitter_tuning.block` is how many variables one
+   proposal moves, in blocks that tile the vector and cycle. The default is n, the whole
+   vector, so no shipped trajectory moved and the pinned witness still holds; the tests cover
+   the refusal, the whole-vector equivalence at block >= n, the cursor advancing, and the short
+   last block when n is not a multiple. It exists because the founding mechanism was missing
+   from the library named after it: the 2001 system nudged one label at a time, and all four
+   methods here moved the whole vector at once.
+
+   Measured with `cjitter_compare_tuned` at the shipped budgets, block 2 against block n:
+
+       labels    climb 12.8 -> 0, anneal 128 -> 0, ga 1.38 -> 0. All three reach exactly 0
+                 on all 7 seeds, range 0: the clean layout, which nothing reached before.
+       erd routed  climb 46134 -> 32293 (range 18662 -> 178), anneal 50692 -> 32579,
+                 ga 40119 -> 39571 (range 4555 -> 23872).
+       erd straight  climb 116506 -> 69142, anneal 104588 -> 70633, ga 72902 -> 80240.
+
+   Two things to read there. The single-point searches gain most, and their spread over seeds
+   collapses, which matters more than the median: climb's routed range of 178 says it finds
+   the same answer from every seed. And the ga does not gain, and on the erd loses, because
+   only its mutation is blocked while crossover still blends every coordinate; that is a weak
+   variant, not a bug, and the honest thing is to report it rather than exempt the ga.
+
+   How the examples took it: as an option, not a switch. `labels` gains a fourth argument and
+   `erd` a `--block N`, both defaulting to the tuning default, so every number pinned in
+   tests/cli.sh and quoted in README.md is the number it always was and no re-measurement was
+   needed. The film is the exception and the reason the block exists: `erd_movie` sets block 2
+   outright, because at the default a proposal displaces all ten tables and the reader watches
+   the migration teleport 47 times instead of tables finding their neighbours. Rebuilt it is
+   124 improvements and 32293 against 53061.
+
+   `auto` stays climb, and the reason is now written down where it was missing. The migration
+   benchmark in ~/articles/cjitter ranks climb the budget-efficient method (it separates from
+   the control on seven of eight instances; the ga does not separate at all), and that is what
+   the default follows. README.md's two example panels rank ga first at the default block,
+   which is the disagreement the old header sentence hid by saying "the shipped benchmarks"
+   without naming one. cjitter.h now names both.
+
+   The paper carries the rest as Section 4.6, exploratory: the whole pre-registered sweep
+   re-run on both arms, the default arm reproducing all 640 frozen per-seed values exactly,
+   and the ga's refutation verdict moving from p = 0.109 to 0.0156 by flipping exactly the
+   pair the leave-one-out appendix had already named as its hinge. Only five of the eight
+   pairs can differ at all (three add one table, where block 2 IS the whole vector), and at
+   n = 5 the exact two-sided floor is 0.0625, so nothing there reaches 0.05. Do not quote the
+   example's 30% as though the benchmark showed it: on the benchmark the margins are 0.01 to
+   8.5 percent. Note also that the benchmark's pair 16 is NOT the shipped example, though both
+   are k = 10 on the same schema: the benchmark freezes the previous revision's coordinates
+   (displacement 1754) and the example the current ones, so their scores differ by an order of
+   magnitude and are not comparable.
+
+4. **The router**, until it reproduces the human layout's 0 crossings and 0 penetration. The
    current one (two bends, border anchors at per-edge attachment slots, sequential and aware
    of every connector already placed) measures 27 and 323 on that layout, and the run prints
    the number so nobody mistakes the floor for the human's. What remains: more bends; a grid
    router.
    Every score comparison against the human sharpens exactly as fast as this number falls.
-4. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
+5. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then
    interpolates between "nothing moves" and "full redraw". It also makes the search easier, by
    giving a rugged objective a basin around a known-good answer.
-5. **Benchmark against graphviz** before believing anything about full redraws. `neato` and `dot`
+6. **Benchmark against graphviz** before believing anything about full redraws. `neato` and `dot`
    are thirty years of graph drawing and are the control for that case, exactly as uniform sampling
    is the control here.
 

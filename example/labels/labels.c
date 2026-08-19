@@ -9,7 +9,12 @@
  * Staying inside the container is a HARD constraint, enforced in the repair callback by clamping
  * the centre; cjitter.h says why that is not a penalty term.
  *
- *     example/labels [labels] [evaluations] [seeds]
+ *     example/labels [labels] [evaluations] [seeds] [block]
+ *
+ * BLOCK is cjitter_tuning.block, the number of variables one proposal moves; omitted it stays
+ * at the default, the whole vector, which is what the README's table reports. This objective
+ * is a sum over labels that interact only where they touch, so 2, one label per proposal, is
+ * the interesting setting and the one the 2001 system used.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,9 +70,11 @@ int main(int argc, char **argv)
     cjitter_problem p;
     cjitter_budget b;
     double *lo, *hi;
+    cjitter_tuning t;
     long n = argc > 1 ? atol(argv[1]) : DEF_LABELS;
     long evals = argc > 2 ? atol(argv[2]) : DEF_EVALS;
     long seeds = argc > 3 ? atol(argv[3]) : DEF_SEEDS;
+    long block = argc > 4 ? atol(argv[4]) : 0;   /* 0: leave the tuning default */
     long i;
 
     /* atol reads junk as 0, so each bound below is also the refusal of a non-numeric
@@ -77,6 +84,9 @@ int main(int argc, char **argv)
     if (n > 10000000) { fprintf(stderr, "labels: too many labels\n"); return 2; }
     if (evals < 1) { fprintf(stderr, "labels: need at least one evaluation\n"); return 2; }
     if (seeds < 1) { fprintf(stderr, "labels: need at least one seed\n"); return 2; }
+    /* Given at all, a block must be a real one: atol reads junk as 0, and 0 here would pass
+     * silently as "the default" rather than being caught the way a junk count is. */
+    if (argc > 4 && block < 1) { fprintf(stderr, "labels: need at least one variable per block\n"); return 2; }
     L.n = n; L.w = LABEL_W; L.h = LABEL_H; L.cw = AREA_W; L.ch = AREA_H;
     lo = malloc((size_t)(2*n) * sizeof *lo);
     hi = malloc((size_t)(2*n) * sizeof *hi);
@@ -89,10 +99,15 @@ int main(int argc, char **argv)
     p.fitness = overlap; p.repair = inside; p.ctx = &L;
     b.evals = evals; b.seed = 1; b.jitter = JITTER; b.pop = POP;
 
+    t = cjitter_tuning_default(p.n);
+    if (block > 0) t.block = block;
+
     printf("%ld labels of %gx%g in a %gx%g container: %g%% of the area is label.\n",
            n, L.w, L.h, L.cw, L.ch, 100.0 * (double)n * L.w * L.h / (L.cw * L.ch));
-    printf("Objective is total overlap area; 0 is a clean layout.\n\n");
-    if (cjitter_compare(&p, &b, seeds, stdout) != 0) {
+    printf("Objective is total overlap area; 0 is a clean layout.\n");
+    printf("One proposal moves %ld of the %ld variables%s.\n\n", t.block, p.n,
+           t.block >= p.n ? " (the whole vector)" : ", so a label at a time");
+    if (cjitter_compare_tuned(&p, &b, &t, seeds, stdout) != 0) {
         fprintf(stderr, "labels: comparison failed\n");
         free(lo); free(hi);
         return 1;

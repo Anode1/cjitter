@@ -38,9 +38,14 @@ typedef char erd_edges_fit[(ERD_NEDGE <= MAXE) ? 1 : -1];
 typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
 
 /* The example's constants, in one place. W_TIER separates the objective's tiers by two orders
- * of magnitude, so length only ever breaks ties; PUSH_PASSES bounds the repair's overlap
- * resolution; the rest are the shipped budget, and every pinned number in tests/cli.sh and
- * the README is a function of them. */
+ * of magnitude; PUSH_PASSES bounds the repair's overlap resolution; the rest are the shipped
+ * budget, and every pinned number in tests/cli.sh and the README is a function of them.
+ *
+ * W_TIER's two orders of magnitude are a weight, not a magnitude, and this comment used to
+ * claim they made length a tie-breaker. Measured at a returned layout they do not: the
+ * searches drive penetration to zero, leaving a few dozen crossings at 100 against 59
+ * connectors of a few hundred units each, so length carries 81 to 90 percent of what varies
+ * and picks the answer. The tiering is still right; the inference from it was not. */
 #define W_TIER      100.0   /* penetration and crossings, against length at 1 */
 #define PUSH_PASSES 4       /* overlap push-out sweeps per repaired table */
 #define EVALS       8000
@@ -560,16 +565,28 @@ int main(int argc, char **argv)
     cjitter_problem p;
     cjitter_budget b;
     cjitter_result r;
+    cjitter_tuning t;
     double lo[64], hi[64], x[64], xh[64];
-    long i, k, nnew, nv;
-    int style;
+    long i, k, nnew, nv, block = 0;
+    int style, ai;
     int want_svg = 0;
 
-    if (argc == 2 && !strcmp(argv[1], "--svg")) want_svg = 1;
-    else if (argc == 2 && !strcmp(argv[1], "--svg-straight")) want_svg = 2;
-    else if (argc > 1) {
-        fprintf(stderr, "erd: options are --svg and --svg-straight\n");
-        return 2;
+    /* --block N is cjitter_tuning.block, how many variables one proposal moves. Omitted, the
+     * tuning default stands: the whole vector, which is what every pinned number here was
+     * measured at. Two is one table per proposal, the setting this objective rewards. */
+    for (ai = 1; ai < argc; ai++) {
+        if (!strcmp(argv[ai], "--svg")) want_svg = 1;
+        else if (!strcmp(argv[ai], "--svg-straight")) want_svg = 2;
+        else if (!strcmp(argv[ai], "--block") && ai + 1 < argc) {
+            block = atol(argv[++ai]);      /* atol reads junk as 0, which this refuses */
+            if (block < 1) {
+                fprintf(stderr, "erd: --block needs at least one variable\n");
+                return 2;
+            }
+        } else {
+            fprintf(stderr, "erd: options are --svg, --svg-straight and --block N\n");
+            return 2;
+        }
     }
 
     /* The anonymized production schema from erd_data.h: the frozen tables keep the human's
@@ -606,6 +623,8 @@ int main(int argc, char **argv)
     }
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = score; p.repair = legal; p.ctx = &g;
     b.evals = EVALS; b.seed = 1; b.jitter = JITTER; b.pop = POP;
+    t = cjitter_tuning_default(nv);
+    if (block > 0) t.block = block;
 
     /* The human's own answer: where the migration's tables sit in the accepted diagram. */
     for (k = 0; k < nnew; k++) {
@@ -635,7 +654,7 @@ int main(int argc, char **argv)
         sc = score(xc, &g);
         sh = score(xh, &g);
         r.x = xb;
-        if (cjitter_run("climb", &p, &b, &r) != 0) {
+        if (cjitter_run_tuned("climb", &p, &b, &t, &r) != 0) {
             fprintf(stderr, "erd: search failed\n");
             return 1;
         }
@@ -650,6 +669,8 @@ int main(int argc, char **argv)
            "representation diagonal-edge tools draw, then with orthogonal routed\n"
            "connectors, what the reader actually sees. Objective in both: penetration\n"
            "and crossings at 100, length at 1. Lower is better.\n");
+    printf("One proposal moves %ld of the %ld variables%s.\n", t.block, nv,
+           t.block >= nv ? " (the whole vector)" : ", so a table at a time");
 
     /* The one style boolean, both ways: the two sections differ in nothing but it. */
     for (style = 1; style >= 0; style--) {
@@ -675,13 +696,13 @@ int main(int argc, char **argv)
                "%-10s layout achieved 0 and 0; the shortfall is the model's, not the\n"
                "%-10s human's)\n\n", "", nc, pen, "", "");
 
-        if (cjitter_compare(&p, &b, SEEDS, stdout) != 0) {
+        if (cjitter_compare_tuned(&p, &b, &t, SEEDS, stdout) != 0) {
             fprintf(stderr, "erd: comparison failed\n");
             return 1;
         }
 
         r.x = x;
-        if (cjitter_run("climb", &p, &b, &r) == 0) {
+        if (cjitter_run_tuned("climb", &p, &b, &t, &r) == 0) {
             /* One run at seed 1, the run --svg draws (routed style). Its score sits
              * somewhere in the table's per-seed spread. */
             printf("\nthe layout %s found at seed 1, score %.6g:\n", r.method, r.best);

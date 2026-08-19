@@ -73,6 +73,22 @@ check "junk seeds are refused, not silence and exit 0" \
       "$(firstline "$out")" "labels: need at least one seed"
 check "junk seeds exit"             "$rc" "2"
 
+# The block option: a real one runs and says so, and a junk one is refused rather than read as
+# zero and passed off as the default, which is the trap atol sets for every argument here.
+set +e
+out=$("$labels" $NL $NE $NS 2); rc=$?
+set -e
+check "labels takes a block"        "$rc" "0"
+check "and says what it moved"      "$(printf '%s' "$out" | grep -c 'One proposal moves 2 of the 24 variables, so a label at a time')" "1"
+check "the default block is the whole vector" \
+      "$(printf '%s' "$("$labels" $NL $NE $NS)" | grep -c 'One proposal moves 24 of the 24 variables (the whole vector)')" "1"
+set +e
+out=$("$labels" $NL $NE $NS junk 2>&1 >/dev/null); rc=$?
+set -e
+check "a junk block is refused, not read as the default" \
+      "$(firstline "$out")" "labels: need at least one variable per block"
+check "junk block exit"             "$rc" "2"
+
 # Determinism: the whole run, byte for byte. This is the claim the README makes and the reason
 # -ffp-contract=off is in the flags.
 "$labels" $NL $NE $NS > "$tmp/l1"
@@ -144,6 +160,7 @@ check "and all twenty placements are pinned" \
          "  D at (1949, 1385)" "  E at (85, 1901)" "  J at (1842, 1745)" "  P at (2493, 755)" \
          "  Q at (2792, 1850)" "  R at (1504, 1531)" "  Y at (1026, 1484)" | digest)"
 
+out2=$("$erd")
 "$erd" > "$tmp/e1"
 "$erd" > "$tmp/e2"
 check "erd twice is byte-identical" "$(digest < "$tmp/e1")" "$(digest < "$tmp/e2")"
@@ -170,8 +187,27 @@ check "with straight connectors this time" "$(grep -c '<polyline' "$tmp/es.svg")
 set +e
 out=$("$erd" junk 2>&1 >/dev/null); rc=$?
 set -e
-check "an unknown erd argument is refused" "$(firstline "$out")" "erd: options are --svg and --svg-straight"
+check "an unknown erd argument is refused" "$(firstline "$out")" "erd: options are --svg, --svg-straight and --block N"
 check "unknown erd argument exit"    "$rc" "2"
+
+# erd's block option. The svg path is used for the positive case: it runs one search instead of
+# the whole five-seed comparison, so the suite gains a second rather than half a minute.
+check "erd's default block is the whole vector" \
+      "$(printf '%s' "$out2" | grep -c 'One proposal moves 20 of the 20 variables (the whole vector)')" "1"
+set +e
+"$erd" --block 2 --svg > "$tmp/eb.svg" 2>/dev/null; rc=$?
+set -e
+check "erd --block 2 --svg exits 0" "$rc" "0"
+check "and still draws four panels" "$(grep -c '<rect' "$tmp/eb.svg")" "181"
+set +e
+out=$("$erd" --block 0 2>&1 >/dev/null); rc=$?
+set -e
+check "a zero block is refused"     "$(firstline "$out")" "erd: --block needs at least one variable"
+check "zero block exit"             "$rc" "2"
+set +e
+out=$("$erd" --block junk 2>&1 >/dev/null); rc=$?
+set -e
+check "a junk block is refused too" "$(firstline "$out")" "erd: --block needs at least one variable"
 
 # ------------------------------------------------------------------ verdict
 

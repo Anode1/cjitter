@@ -68,6 +68,35 @@ static double always_worst(const double *x, void *ctx)
     return HUGE_VAL;
 }
 
+/* Records, per variable, whether it ever took a value other than the one it held at the first
+ * point scored, and the largest number of variables any one proposal changed at once. Together
+ * those are what a block claims: no proposal moves more than BLOCK of them, and the cursor
+ * advances far enough that every one of them eventually moves. */
+typedef struct {
+    long   n, calls, widest;
+    double first[8], prev[8];
+    int    moved[8];
+} Moves;
+
+static double moves_probe(const double *x, void *ctx)
+{
+    Moves *m = ctx;
+    double f = 0;
+    long j, changed = 0;
+    for (j = 0; j < m->n; j++) {
+        if (m->calls == 0) m->first[j] = x[j];
+        else {
+            if (x[j] != m->first[j]) m->moved[j] = 1;
+            if (x[j] != m->prev[j]) changed++;
+        }
+        m->prev[j] = x[j];
+        f += x[j] * x[j];
+    }
+    if (m->calls > 0 && changed > m->widest) m->widest = changed;
+    m->calls++;
+    return f;
+}
+
 int main(void)
 {
     static const double lo2[2] = { -5, -5 }, hi2[2] = { 5, 5 };
@@ -208,7 +237,7 @@ int main(void)
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
         cjitter_budget b = { 300, 9, 0.1, 0 };
         cjitter_tuning dflt = cjitter_tuning_default(2);
-        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0 };
+        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         cjitter_tuning bad;
         double x[2], y[2];
         cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
@@ -241,6 +270,92 @@ int main(void)
             }
             CHECK(wrote == 0,
                   "tuning: compare refuses a bad one before printing anything");
+        }
+    }
+
+    /* The block: how many variables one proposal moves. The default is n, the whole vector,
+     * because a default that moved a trajectory would change what every published seed
+     * reproduces; anything at or above n has to mean the same thing. A narrower block tiles the
+     * vector and cycles, so the checks are that it is refused when out of range, that it still
+     * spends the budget exactly and holds the box and the repair, and above all that the cursor
+     * advances: a cursor stuck at zero would pin the tail of the vector and still look from the
+     * outside like a working search. The short last block, when n is not a multiple, is the
+     * only way the last variables are ever reached, so it gets its own check. */
+    {
+        static const double lo8[8] = { -5, -5, -5, -5, -5, -5, -5, -5 };
+        static const double hi8[8] = {  5,  5,  5,  5,  5,  5,  5,  5 };
+        Watch w = { lo8, hi8, 8, 0, 0, 0, 0, HUGE_VAL };
+        cjitter_problem p = { 8, lo8, hi8, watched_sphere, NULL, &w };
+        cjitter_budget b = { 400, 3, 0.1, 0 };
+        cjitter_tuning dflt = cjitter_tuning_default(8);
+        cjitter_tuning t;
+        double x[8], y[8];
+        cjitter_result r = { 0, x, 0, 0, NULL }, r2 = { 0, y, 0, 0, NULL };
+        long m;
+
+        CHECK(dflt.block == 8, "block: the default is n, the whole vector");
+        t = dflt; t.block = 0;
+        w.calls = 0;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &t, &r) == -1 && w.calls == 0,
+              "block: 0 is refused, before any evaluation");
+        t = dflt; t.block = 108;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &dflt, &r) == 0 &&
+              cjitter_run_tuned("climb", &p, &b, &t, &r2) == 0 &&
+              r.best == r2.best && memcmp(x, y, sizeof x) == 0,
+              "block: at or above n is the whole vector, bit for bit");
+        t = dflt; t.block = 2;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &t, &r2) == 0 && r2.best != r.best,
+              "block: a narrower block is a different trajectory");
+
+        /* Every method that jitters, at the narrowest block: the budget stays exact and no
+         * point escapes the box or the repair. A blocked proposal copies the variables it does
+         * not move, and copying the wrong ones is exactly how that invariant would break. */
+        for (m = 0; cjitter_methods[m]; m++) {
+            Watch wr = { lo8, hi8, 8, 0, 0, 0, 1, HUGE_VAL };
+            cjitter_problem pr = { 8, lo8, hi8, watched_sphere, floor_first, &wr };
+            cjitter_result rr = { 0, x, 0, 0, NULL };
+            t = dflt; t.block = 1;
+            if (cjitter_run_tuned(cjitter_methods[m], &pr, &b, &t, &rr) != 0 ||
+                rr.evals != b.evals || wr.calls != b.evals || wr.outside || wr.unrepaired)
+                break;
+        }
+        CHECK(cjitter_methods[m] == NULL,
+              "block: at block 1 every method spends the budget exactly and holds box "
+              "and repair");
+
+        /* The cursor advances. Restarts are off, so after the first draw the only thing that
+         * can move a variable is a blocked proposal: if all eight move, the blocks tiled the
+         * whole vector, and no proposal changed more than two at once (a rejected proposal and
+         * the next one differ in their own block and the one before it, never in more). */
+        {
+            Moves mv;
+            cjitter_problem pm = { 8, lo8, hi8, moves_probe, NULL, &mv };
+            cjitter_result rm = { 0, x, 0, 0, NULL };
+            long j, all = 1;
+            memset(&mv, 0, sizeof mv);
+            mv.n = 8;
+            t = dflt; t.block = 1; t.climb_restart_at = 0;
+            CHECK(cjitter_run_tuned("climb", &pm, &b, &t, &rm) == 0, "block: the cycling run ran");
+            for (j = 0; j < 8; j++) if (!mv.moved[j]) all = 0;
+            CHECK(all, "block: the cursor cycles, so every variable is eventually moved");
+            CHECK(mv.widest <= 2, "block: at block 1 no proposal moved more than one variable");
+        }
+
+        /* n = 5 with block 2 tiles as 2, 2, 1: the last variable is reachable only through the
+         * short tail block, so its moving is the check that the tail is not dropped. */
+        {
+            static const double lo5[5] = { -5, -5, -5, -5, -5 };
+            static const double hi5[5] = {  5,  5,  5,  5,  5 };
+            Moves mv;
+            cjitter_problem pm = { 5, lo5, hi5, moves_probe, NULL, &mv };
+            cjitter_result rm = { 0, x, 0, 0, NULL };
+            cjitter_tuning t5 = cjitter_tuning_default(5);
+            memset(&mv, 0, sizeof mv);
+            mv.n = 5;
+            t5.block = 2; t5.climb_restart_at = 0;
+            CHECK(cjitter_run_tuned("climb", &pm, &b, &t5, &rm) == 0 && rm.evals == b.evals &&
+                  mv.moved[4] && mv.widest <= 4,
+                  "block: a short last block is reached, so no variable is left behind");
         }
     }
 

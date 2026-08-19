@@ -37,6 +37,7 @@ cjitter_tuning cjitter_tuning_default(long n)
     t.anneal_move_decay = ANNEAL_MOVE_DECAY;
     t.ga_mutate         = GA_MUTATE;
     t.ga_mutate_decay   = GA_MUTATE_DECAY;
+    t.block             = n > 0 ? n : 1;   /* the whole vector: today's trajectories */
     return t;
 }
 
@@ -50,7 +51,8 @@ static int tuning_ok(const cjitter_tuning *t)
            t->anneal_cool_ln <= 0 &&
            t->anneal_move_decay >= 0 && t->anneal_move_decay <= 1 &&
            t->ga_mutate >= 0 &&
-           t->ga_mutate_decay >= 0 && t->ga_mutate_decay <= 1;
+           t->ga_mutate_decay >= 0 && t->ga_mutate_decay <= 1 &&
+           t->block >= 1;
 }
 
 /* Scratch for one run. Allocated once here, so no search step allocates. */
@@ -60,6 +62,7 @@ typedef struct {
     double  *pop, *fit;          /* ga */
     long     npop;
     Rng      rng;
+    long     cursor;             /* first variable of the next block; see jitter() */
     long     spent, budget;
     double   bestf;
     int      has_best;           /* best/bestf are defined; set by the first keep() */
@@ -147,11 +150,24 @@ static void keep(Run *R, const double *x, double f)
     }
 }
 
-/* A jittered neighbour: each variable moved by a normal draw scaled to its own range. */
+/* A jittered neighbour: each variable in the proposal's block moved by a normal draw scaled to
+ * its own range, the rest copied. The blocks tile the vector in order and cycle, one per call,
+ * so successive proposals walk across the problem; cjitter.h's tuning comment says when a
+ * block narrower than n is worth having. At block >= n this is the whole vector, drawing n
+ * values in index order exactly as it always did: the default must not move a single
+ * trajectory, so that path is written to be the same arithmetic in the same sequence. */
 static void jitter(Run *R, const double *from, double *to, double scale)
 {
-    long j;
-    for (j = 0; j < R->p->n; j++)
+    long j, first = 0, last = R->p->n;
+    if (R->tun.block < R->p->n) {
+        first = R->cursor;
+        last = first + R->tun.block;
+        if (last > R->p->n) last = R->p->n;   /* a short last block when n is not a multiple */
+        R->cursor = last < R->p->n ? last : 0;
+        for (j = 0; j < first; j++)      to[j] = from[j];
+        for (j = last; j < R->p->n; j++) to[j] = from[j];
+    }
+    for (j = first; j < last; j++)
         to[j] = from[j] + gauss(&R->rng) * scale * (R->p->hi[j] - R->p->lo[j]);
     clamp(R->p, to);
 }
@@ -291,9 +307,9 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
     for (j = 0; j < p->n; j++)
         if (!(p->lo[j] <= p->hi[j])) return -1;   /* also refuses NaN bounds */
     if (!(b->jitter >= 0) || b->pop < 0) return -1;   /* also refuses NaN jitter */
-    /* NULL and "auto" both take the default method: the one the shipped benchmarks rank
-     * most budget-efficient, currently climb, tied to CJITTER_VERSION because changing it
-     * changes what a seed reproduces. */
+    /* NULL and "auto" both take the default method, currently climb, tied to CJITTER_VERSION
+     * because changing it changes what a seed reproduces. cjitter.h says which benchmark the
+     * choice comes from and which one disagrees with it. */
     if (!method || !strcmp(method, "auto")) method = "climb";
     for (mi = 0; cjitter_methods[mi] && strcmp(method, cjitter_methods[mi]); mi++)
         ;

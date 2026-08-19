@@ -46,6 +46,16 @@ The methods' internal constants (patience, cooling, mutation) come from
 `cjitter_run_tuned` or `cjitter_compare_tuned`. Every field is read literally, so
 `ga_mutate = 0` is a real mutation ablation.
 
+One of those fields is worth knowing about before you tune anything else. `block` is how many
+variables a single proposal moves; the default is all of them. When the objective is a sum
+over objects that interact weakly, a proposal that moves everything at once improves one
+object and spoils another, and gets rejected for the spoiling. Setting `block` to the width
+of one object, 2 for a point in the plane, steps the search through the problem an object at
+a time, which is the mechanism this library is named after and can be worth an order of
+magnitude in budget. It is not free: where the good moves adjust several objects together, a
+narrow block cannot express them. `cjitter.h` says the rest, and `cjitter_compare_tuned`
+measures it for your problem the way it measures everything else.
+
 ## The control
 
 Most optimisation libraries will spend a million evaluations and never mention that uniform
@@ -96,9 +106,17 @@ compromise, since a reader who knows where a table sits should still find it the
 turns 88 free variables into 20.
 
 The search itself is worth watching. The film is a smoothed replay of climb's improvements
-at the shipped budget and seed: the frozen diagram stands still, the migration's ten tables
-glide from the first random draw into the pinned layout, and the connectors re-route at
-every frame. `make movie` rebuilds it.
+at the shipped budget and seed, with `block` set to 2: the frozen diagram stands still, the
+migration's ten tables glide from the first random draw into their neighbourhoods, and the
+connectors re-route at every frame. `make movie` rebuilds it.
+
+The block is why the film is watchable, and the reason is worth stating. At the default
+block, one proposal moves all ten tables at once, so a proposal that seats one table beside
+its neighbour usually unseats another and is rejected for it: the run accepts 47 proposals
+out of 8000 and each one displaces the whole migration, which reads as ten tables
+teleporting together. At `block` 2 the same climb accepts 124, each moving one table, and
+finishes 39 percent lower (32293 against 46134). What the film shows is what the objective
+was always asking for and the proposal shape could not express.
 
 ![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
 
@@ -153,6 +171,24 @@ score means only as much as its calibration line, and the run prints both:
     anneal        50691.7      23410.8    5/5     0.0312      better
     ga            40118.6      4554.91    5/5     0.0312      better
 
+Those are the default tuning's numbers, one proposal moving all twenty variables. `./erd
+--block 2` moves one table per proposal instead and reports, under the routed model:
+
+    method         median        range    wins    sign-p   vs random
+    random         100056      26357.5       -         - the control
+    climb         32292.7      178.093    5/5     0.0312      better
+    anneal        32578.7         1595    5/5     0.0312      better
+    ga              39571      23871.9    5/5     0.0312      better
+
+Read the range column before the medians. Climb's spread over five seeds falls from 18662 to
+178: the blocked search finds substantially the same layout whichever seed it is given, which
+is worth more in a tool run once than the 30 percent the median moved. The genetic algorithm
+is the exception and it is not a bug: only its mutation is blocked while crossover still
+blends every coordinate, so a narrow block leaves it a weak-mutation GA. On the label problem
+the same change is decisive rather than incremental --- `./labels 90 20000 7 2` puts climb,
+annealing and the GA all at exactly 0 on all seven seeds, the clean layout none of them
+reaches at any budget with whole-vector proposals.
+
 All three searches beat the control on every seed under both models, and the heuristic loses
 under both: a table at its neighbours' centroid lands on the connectors running between its
 neighbours. Read the human rows through the calibration lines: most of the human's score in
@@ -177,10 +213,18 @@ edges.
 The tiers in the ERD example are worth copying. A connector passing through a table is scored
 by the *length of the overlap*, not by a count: a count is flat under small moves, so the
 search has nothing to follow and walks at random on the plateau. Crossings stay a count, at a
-weight two orders of magnitude above connector length, so ties break toward a tidy diagram
-without any weight having been guessed. And when the medium being scored is not a straight
-line, score the medium: the ERD objective routes every connector before reading it, and
-prints how well that router reproduces the one layout whose on-screen quality is known.
+weight two orders of magnitude above connector length, so no weight has to be guessed. And
+when the medium being scored is not a straight line, score the medium: the ERD objective
+routes every connector before reading it, and prints how well that router reproduces the one
+layout whose on-screen quality is known.
+
+One caveat on tiering, measured rather than assumed. A weight two orders of magnitude down
+does not make a term a tie-breaker, because a tier's weight and a tier's magnitude are
+different things. Once the ERD searches drive penetration to zero, which all of them do, the
+surviving score is a few dozen crossings at 100 against sixty connectors of a few hundred
+units each: at the search's own optimum, length is 81 to 90 percent of everything that
+varies, and the layout it picks is the one length prefers. Tier by orders of magnitude, then
+go and look at what the tiers actually weigh at the answer.
 
 Node overlap and canvas bounds are hard constraints in the repair callback, for the reason
 `cjitter.h` gives at the `cjitter_repair` typedef.
