@@ -97,9 +97,10 @@ int main(int argc, char **argv)
     }
     p.n = 2 * n; p.lo = lo; p.hi = hi;
     p.fitness = overlap; p.repair = inside; p.ctx = &L;
-    b.evals = evals; b.seed = 1; b.jitter = JITTER; b.pop = POP;
+    b.evals = evals; b.seed = 1;
 
     t = cjitter_tuning_default(p.n);
+    t.jitter = JITTER; t.pop = POP;
     if (block > 0) t.block = block;
 
     printf("%ld labels of %gx%g in a %gx%g container: %g%% of the area is label.\n",

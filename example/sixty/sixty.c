@@ -86,7 +86,7 @@ static int cmp_double(const void *a, const void *b)
 static int one_run(const char *method, const cjitter_problem *p, long evals,
                    uint32_t seed, double *xbuf, double *best)
 {
-    cjitter_budget b = { 0, 0, 0, 0 };
+    cjitter_budget b = { 0, 0 };
     cjitter_result r;
     b.evals = evals;
     b.seed = seed;

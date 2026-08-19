@@ -29,6 +29,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>   /* FILE, for the compare stream */
 
 /* The library's version, bumped only when the interface or a method's trajectory changes:
  * either one changes what a seed reproduces. */
@@ -55,12 +56,14 @@ typedef struct {
     void            *ctx;
 } cjitter_problem;
 
+/* A budget is what a run may spend and where its randomness starts: the two things two runs
+ * must share before their results compare at all. Everything about HOW the budget is spent,
+ * the first move size and the ga's population included, is tuning, and moved there in 0.11.0:
+ * a tuning comes from cjitter_tuning_default, so a field there is initialised for every
+ * caller who follows the contract, where a budget is routinely filled field by field. */
 typedef struct {
     long     evals;      /* the budget, spent by every method exactly */
     uint32_t seed;       /* run seed; compare uses it as the base of its seed panel */
-    double   jitter;     /* first move size, as a fraction of each variable's range;
-                            0 takes 0.1, negative is refused */
-    long     pop;        /* ga only; 0 takes 30, negative is refused */
 } cjitter_budget;
 
 /* The methods' internal constants. Take the defaults from cjitter_tuning_default and change
@@ -93,7 +96,14 @@ typedef struct {
  * already part of a result's identity, and two runs verified differently do not compare. And
  * a tuning must come from cjitter_tuning_default, where a budget is routinely filled field by
  * field, so a field added here is initialised for every caller who follows the contract and a
- * field added there would have been uninitialised for every caller who already exists. */
+ * field added there would have been uninitialised for every caller who already exists.
+ *
+ * jitter and pop lived in the budget until 0.11.0 and moved here under the same reasoning:
+ * they are part of how a method spends, so they are part of a result's identity. jitter is
+ * the first move size as a fraction of each variable's range, read literally like every
+ * other field, so 0 pins every proposal to its parent, a real ablation. pop is the ga's
+ * population; one only re-scores a point and zero is no population at all, so anything
+ * under 2 is refused. */
 typedef struct {
     long   climb_patience;    /* >= 1; rejections before the move size shrinks              */
     double climb_shrink;      /* in (0, 1); the shrink factor                               */
@@ -103,14 +113,21 @@ typedef struct {
     double anneal_move_decay; /* in [0, 1]; move-size fraction the cooling removes          */
     double ga_mutate;         /* >= 0; mutation move size as a fraction of jitter           */
     double ga_mutate_decay;   /* in [0, 1]; mutation-size fraction removed over the run     */
+    double ga_crossover;      /* in [0, 1]; chance a child blends two tournament winners
+                                 rather than copying one. 1 is the shipped GA and draws no
+                                 gate, so the default moves no trajectory; 0 is a crossover
+                                 ablation, tournament winners surviving on mutation alone,
+                                 which is what a claim about recombination must beat        */
     long   block;             /* >= 1; variables one proposal moves; n or more moves all    */
     long   verify;            /* >= 0; fresh evaluations of the RETURNED point, spent after
                                  the search and NOT against the budget; 0 disables         */
+    double jitter;            /* >= 0; first move size, fraction of each variable's range   */
+    long   pop;               /* >= 2; the ga's population                                  */
 } cjitter_tuning;
 
 /* The shipped constants: patience 40 + 10n, shrink 0.5, restart at 1/64, 20 probes,
- * cooling ln 1e-3, move decay 0.9, mutation 0.3 of jitter decaying by 0.9, block n, verify 0.
- * N is the
+ * cooling ln 1e-3, move decay 0.9, mutation 0.3 of jitter decaying by 0.9, crossover 1,
+ * block n, verify 0, jitter 0.1, pop 30. N is the
  * problem's variable count, which the patience and block defaults scale with, so a tuning
  * taken for one n and used at another is a different tuning: block would no longer cover the
  * vector. */
@@ -172,9 +189,9 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
  * top of this file to STREAM (a FILE*; NULL means stdout). Returns 0, or -1 on a bad
  * argument or an allocation failure, before anything is printed. SEEDS is at most 1000:
  * past that the exact tests' arithmetic stops being exact. */
-int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, void *stream);
+int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, FILE *stream);
 int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
-                          const cjitter_tuning *t, long seeds, void *stream);
+                          const cjitter_tuning *t, long seeds, FILE *stream);
 
 /* The four names, NULL-terminated, in the order compare reports them. */
 extern const char *const cjitter_methods[];

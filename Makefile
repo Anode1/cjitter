@@ -29,7 +29,7 @@ all: examples
 check: ut cliut
 
 # The library artifact: the two objects and the one public header. rng.h stays internal;
-# cjitter.h includes nothing beyond stddef and stdint.
+# cjitter.h includes nothing beyond stddef, stdint and stdio (FILE, for the compare stream).
 lib: libcjitter.a
 libcjitter.a: $(OBJ)
 	$(AR) rcs $@ $(OBJ)

@@ -139,11 +139,12 @@ int main(void)
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 100, 1, 0.1, 0 };
+        cjitter_budget b = { 100, 1 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         cjitter_problem bad;
         cjitter_budget bb;
+        cjitter_tuning tb;
 
         CHECK(cjitter_run("", &p, &b, &r) == -1, "run refuses an empty method name");
         CHECK(cjitter_run("climb", NULL, &b, &r) == -1, "run refuses a NULL problem");
@@ -162,10 +163,12 @@ int main(void)
         CHECK(cjitter_run("climb", &bad, &b, &r) == -1, "run refuses an inverted box");
         bb = b; bb.evals = 0;
         CHECK(cjitter_run("climb", &p, &bb, &r) == -1, "run refuses a budget of no evaluations");
-        bb = b; bb.jitter = -0.1;
-        CHECK(cjitter_run("climb", &p, &bb, &r) == -1, "run refuses a negative jitter");
-        bb = b; bb.pop = -1;
-        CHECK(cjitter_run("ga", &p, &bb, &r) == -1, "run refuses a negative population");
+        tb = cjitter_tuning_default(2); tb.jitter = -0.1;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &tb, &r) == -1,
+              "tuning refuses a negative jitter");
+        tb = cjitter_tuning_default(2); tb.pop = -1;
+        CHECK(cjitter_run_tuned("ga", &p, &b, &tb, &r) == -1,
+              "tuning refuses a negative population");
         CHECK(w.calls == 0, "and no refusal called the fitness even once");
     }
 
@@ -173,7 +176,7 @@ int main(void)
      * was scored, inside the box, never uninitialized memory handed back with rc 0. */
     {
         cjitter_problem p = { 2, lo2, hi2, always_worst, NULL, NULL };
-        cjitter_budget b = { 50, 1, 0.1, 0 };
+        cjitter_budget b = { 50, 1 };
         double x[2] = { 12345.0, 67890.0 };
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("random", &p, &b, &r) == 0 &&
@@ -194,7 +197,7 @@ int main(void)
             for (bi = 0; bi < 3; bi++) {
                 Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
                 cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-                cjitter_budget b = { 0, 7, 0.1, 0 };
+                cjitter_budget b = { 0, 7 };
                 double x[2], y[2];
                 cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
                 b.evals = budgets[bi];
@@ -230,10 +233,13 @@ int main(void)
         for (m = 0; cjitter_methods[m]; m++) {
             Watch w = { lo2, hi2, 2, 0, 0, 0, 1, HUGE_VAL };
             cjitter_problem p = { 2, lo2, hi2, watched_sphere, floor_first, &w };
-            cjitter_budget b = { 400, 3, 0.2, 0 };
+            cjitter_budget b = { 400, 3 };
+            cjitter_tuning tw = cjitter_tuning_default(2);
             double x[2];
             cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
-            if (cjitter_run(cjitter_methods[m], &p, &b, &r) != 0 || w.unrepaired) held = 0;
+            tw.jitter = 0.2;   /* the width this check was calibrated at, kept through the move */
+            if (cjitter_run_tuned(cjitter_methods[m], &p, &b, &tw, &r) != 0 || w.unrepaired)
+                held = 0;
             if (x[0] < 0.5) returned = 0;
         }
         CHECK(held, "repair: every scored point satisfied the constraint, all four methods");
@@ -248,9 +254,9 @@ int main(void)
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 300, 9, 0.1, 0 };
+        cjitter_budget b = { 300, 9 };
         cjitter_tuning dflt = cjitter_tuning_default(2);
-        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         cjitter_tuning bad;
         double x[2], y[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
@@ -271,6 +277,18 @@ int main(void)
         bad = dflt; bad.ga_mutate = 0;
         CHECK(cjitter_run_tuned("ga", &p, &b, &bad, &r) == 0,
               "tuning: ga_mutate 0 is an ablation that runs, not a default");
+        bad = dflt; bad.ga_crossover = 1.5;
+        CHECK(cjitter_run_tuned("ga", &p, &b, &bad, &r) == -1,
+              "tuning: a crossover chance past 1 is refused");
+        /* The crossover ablation: at 0 every child is a mutated tournament winner. It must
+         * run, spend exactly, and be a different trajectory from the shipped GA; that
+         * difference is what makes ga_crossover = 0 a real ablation rather than a synonym. */
+        w.calls = 0;
+        bad = dflt; bad.ga_crossover = 0;
+        CHECK(cjitter_run_tuned("ga", &p, &b, &bad, &r) == 0 && w.calls == b.evals &&
+              cjitter_run_tuned("ga", &p, &b, &dflt, &r2) == 0 &&
+              (r.best != r2.best || memcmp(x, y, sizeof x) != 0),
+              "tuning: ga_crossover 0 runs, spends exactly, and is not the shipped GA");
         bad = dflt; bad.climb_shrink = 1.0;
         {
             FILE *tf = tmpfile();
@@ -299,7 +317,7 @@ int main(void)
         static const double hi8[8] = {  5,  5,  5,  5,  5,  5,  5,  5 };
         Watch w = { lo8, hi8, 8, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 8, lo8, hi8, watched_sphere, NULL, &w };
-        cjitter_budget b = { 400, 3, 0.1, 0 };
+        cjitter_budget b = { 400, 3 };
         cjitter_tuning dflt = cjitter_tuning_default(8);
         cjitter_tuning t;
         double x[8], y[8];
@@ -384,7 +402,7 @@ int main(void)
         static const double lo3[3] = { -2, -2, -2 }, hi3[3] = { 2, 2, 2 };
         Watch w = { lo3, hi3, 3, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 3, lo3, hi3, watched_sphere, NULL, &w };
-        cjitter_budget b = { 300, 5, 0.1, 0 };
+        cjitter_budget b = { 300, 5 };
         cjitter_tuning dflt = cjitter_tuning_default(3);
         cjitter_tuning t;
         double x[3];
@@ -445,14 +463,17 @@ int main(void)
     }
 
     /* NULL and "auto" are the default method, bit for bit the current climb; the alias is
-     * an interface, so it gets its own checks. And the new refusals: a seed panel past
-     * 1000 (the exact tests' arithmetic stops being exact), NaN jitter (it silently became
-     * the 0.1 default), and a ga population of one (the whole budget re-scores a point). */
+     * an interface, so it gets its own checks. And the refusals that moved into the tuning
+     * with jitter and pop in 0.11.0: a seed panel past 1000 (the exact tests' arithmetic
+     * stops being exact), NaN jitter (it silently became the 0.1 default once), and a
+     * population under two (one only re-scores a point, zero is no population at all). A bad
+     * pop now refuses every method, the way a bad ga_mutate always did: a tuning is either
+     * valid or it is not, whoever reads which field. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 200, 11, 0.1, 0 };
-        cjitter_budget bb;
+        cjitter_budget b = { 200, 11 };
+        cjitter_tuning tb;
         double x[2], y[2], z2[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
         cjitter_result r3 = { 0, z2, 0, 0, NULL, 0, 0, 0 };
@@ -465,19 +486,24 @@ int main(void)
               "auto and NULL are the default method, bit for bit the current climb");
         CHECK(cjitter_compare(&p, &b, 1001, NULL) == -1,
               "compare refuses a seed panel past 1000");
-        bb = b; bb.jitter = 0.0 / 0.0;
-        CHECK(cjitter_run("climb", &p, &bb, &r) == -1, "run refuses a NaN jitter");
-        bb = b; bb.pop = 1;
-        CHECK(cjitter_run("ga", &p, &bb, &r) == -1, "run refuses a ga population of one");
-        CHECK(cjitter_run("climb", &p, &bb, &r) == 0,
-              "and pop 1 is no refusal for a method that has no population");
+        tb = cjitter_tuning_default(2); tb.jitter = 0.0 / 0.0;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &tb, &r) == -1,
+              "tuning refuses a NaN jitter");
+        tb = cjitter_tuning_default(2); tb.pop = 1;
+        CHECK(cjitter_run_tuned("ga", &p, &b, &tb, &r) == -1,
+              "tuning refuses a population of one");
+        CHECK(cjitter_run_tuned("climb", &p, &b, &tb, &r) == -1,
+              "and for climb too: a tuning is valid or it is not, whoever reads the field");
+        tb = cjitter_tuning_default(2); tb.jitter = 0;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &tb, &r) == 0,
+              "jitter 0 is a real ablation that runs: every proposal pinned to its parent");
     }
 
     /* Seed 0 is remapped inside run as it is in rng, so it works and reproduces. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 50, 0, 0.1, 0 };
+        cjitter_budget b = { 50, 0 };
         double x[2], y[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("random", &p, &b, &r) == 0 &&
@@ -485,15 +511,17 @@ int main(void)
               "seed 0 runs and reproduces, not a degenerate stream");
     }
 
-    /* The GA's population defaults when 0 and is clamped to the budget when larger than it,
-     * so a small budget still spends exactly and never indexes past what was scored. */
+    /* The GA's population is clamped to the budget when larger than it, so a small budget
+     * still spends exactly and never indexes past what was scored. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 10, 1, 0.1, 1000 };
+        cjitter_budget b = { 10, 1 };
+        cjitter_tuning tp = cjitter_tuning_default(2);
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
-        CHECK(cjitter_run("ga", &p, &b, &r) == 0 && w.calls == 10,
+        tp.pop = 1000;
+        CHECK(cjitter_run_tuned("ga", &p, &b, &tp, &r) == 0 && w.calls == 10,
               "ga: a population larger than the budget is clamped, budget still exact");
     }
 
@@ -503,7 +531,7 @@ int main(void)
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 5000, 1, 0.1, 0 };
+        cjitter_budget b = { 5000, 1 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 && r.best < 1e-6,
@@ -522,7 +550,7 @@ int main(void)
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 5000, 160, 0.1, 0 };
+        cjitter_budget b = { 5000, 160 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
         CHECK(cjitter_run("climb", &p, &b, &r) == 0 && w.calls == 5000 && r.evals == 5000,
@@ -537,7 +565,7 @@ int main(void)
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
         cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
-        cjitter_budget b = { 200, 1, 0.1, 0 };
+        cjitter_budget b = { 200, 1 };
         char buf[4096], buf2[4096];
         size_t got, got2;
         FILE *f;

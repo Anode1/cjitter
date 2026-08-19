@@ -115,12 +115,13 @@ int main(int argc, char **argv)
         lo[i+1] = 0; hi[i+1] = g.ch;
     }
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = traced; p.repair = legal; p.ctx = &g;
-    b.evals = EVALS; b.seed = 1; b.jitter = JITTER; b.pop = POP;
+    b.evals = EVALS; b.seed = 1;
     /* One table per proposal. The film exists to show the search working, and at the default
      * block every proposal displaces all ten tables at once, so the reader watches the whole
      * migration teleport on each of the 47 acceptances instead of tables finding their
      * neighbours. cjitter.h's tuning comment says why this is the better search as well. */
     tun = cjitter_tuning_default(nv);
+    tun.jitter = JITTER; tun.pop = POP;
     tun.block = 2;
 
     r.x = x;

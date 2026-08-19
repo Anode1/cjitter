@@ -28,12 +28,17 @@ plus noise is jitter, which is why the name fits the whole family.
 ## The contract (read first)
 
 - **`c/cjitter.h`** -- the interface, and the specification. A problem is `n`, a box, a fitness
-  function and an optional repair callback. A budget is evaluations, a seed and a first move
-  size. A tuning starts from `cjitter_tuning_default` and every field is read literally, so
-  results only compare across runs that share one.
-- **`README.md`** -- what the library promises and the measured output of both examples. Every
-  number in it comes from running the shipped binaries; the code is the ground truth and the
-  documents follow it.
+  function and an optional repair callback. A budget is evaluations and a seed; the first
+  move size, the ga's population and every other constant live in the tuning, which starts
+  from `cjitter_tuning_default` and reads every field literally, so results only compare
+  across runs that share one.
+- **`README.md`** -- the short front door: what the library promises, for a reader who has
+  never seen it and for a scientist deciding whether it is worth their time. The deep
+  material lives beside it: `docs/tuning.md` (the fields, the block, verify),
+  `docs/objective.md` (objective design and the repair lesson), `example/erd/README.md`
+  (the diagram application in full, with its measured tables). Every number in all of them
+  comes from running the shipped binaries; the code is the ground truth and the documents
+  follow it.
 - Hard constraints belong in `repair`, never in the fitness; `cjitter.h` says why at the
   `cjitter_repair` typedef.
 
@@ -67,6 +72,9 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
 
     c/cjitter.h     the interface
     c/cjitter.c     the four searches and cjitter_compare
+    docs/           tuning.md (the fields, the block, verify) and objective.md (objective
+                    design, the repair lesson): README.md's deep half, split out so the
+                    front page reads in two minutes
     c/rng           deterministic xorshift64*, period 2^64-1. The 32-bit generator it replaced
                     had compare's seed streams overlapping after 1.6e8 draws, a budget one
                     command-line argument could reach; its bpnn ancestor once understated a
@@ -79,7 +87,8 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
                         Phase two wires the smbpann engine (a ~/bpnn checkout) in as the
                         constant-optimization landscape.
     example/erd/erd.c   tables added by a migration onto a frozen diagram, the experiment
-                        run under both edge models (one style boolean); --svg draws it
+                        run under both edge models (one style boolean); --svg draws it;
+                        README.md there carries the walkthrough and the measured tables
     example/erd/data/   the real schema, anonymized: ERD.mwb, both revisions as PNG, the
                         geometry as JSON, and PROVENANCE.md for what the anonymization changed
     tests/tests.c       unit suite: refusals, the exact budget, determinism, box and repair
@@ -98,7 +107,8 @@ seed, which reads as strict but passes a truly-equal method one time in twelve a
 gets harder as seeds are added because a minimum only falls, and threw away the pairing the
 shared panel had already bought.
 
-The measured results live in README.md's two tables and are not restated here. The shape of
+The measured results live in README.md's labels table and example/erd/README.md's two
+sections and are not restated here. The shape of
 them: all three searches now beat the control on every seed of both examples, and the ERD
 searches also beat the human's accepted layout, which says the objective misses what the
 human optimizes, semantic grouping, aligned rows, room to grow, and never that the tool

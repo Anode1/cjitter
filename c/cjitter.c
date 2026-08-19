@@ -37,7 +37,10 @@ cjitter_tuning cjitter_tuning_default(long n)
     t.anneal_move_decay = ANNEAL_MOVE_DECAY;
     t.ga_mutate         = GA_MUTATE;
     t.ga_mutate_decay   = GA_MUTATE_DECAY;
+    t.ga_crossover      = 1.0;             /* the shipped GA: every child a blend */
     t.block             = n > 0 ? n : 1;   /* the whole vector: today's trajectories */
+    t.jitter            = 0.1;
+    t.pop               = GA_POP_DEFAULT;
     t.verify            = 0;               /* off: report the smallest observation */
     return t;
 }
@@ -53,8 +56,11 @@ static int tuning_ok(const cjitter_tuning *t)
            t->anneal_move_decay >= 0 && t->anneal_move_decay <= 1 &&
            t->ga_mutate >= 0 &&
            t->ga_mutate_decay >= 0 && t->ga_mutate_decay <= 1 &&
+           t->ga_crossover >= 0 && t->ga_crossover <= 1 &&
            t->block >= 1 &&
-           t->verify >= 0;
+           t->verify >= 0 &&
+           t->jitter >= 0 &&      /* false for NaN too, which this refuses on purpose */
+           t->pop >= 2;           /* one only re-scores a point; zero is no population */
 }
 
 /* Scratch for one run. Allocated once here, so no search step allocates. */
@@ -276,14 +282,21 @@ static void run_ga(Run *R, double jit)
             /* uni() < 1, so (long)(uni()*np) is at most np-1 for any np this library can
              * allocate: the product stays strictly below np in double. */
             long a = (long)(uni(&R->rng) * (double)np), b = (long)(uni(&R->rng) * (double)np);
-            long c = (long)(uni(&R->rng) * (double)np), d = (long)(uni(&R->rng) * (double)np);
-            const double *pa, *pb;
+            const double *pa = R->pop + (R->fit[a] < R->fit[b] ? a : b) * n;
             double *kid = next + i * n;
-            pa = R->pop + (R->fit[a] < R->fit[b] ? a : b) * n;
-            pb = R->pop + (R->fit[c] < R->fit[d] ? c : d) * n;
-            for (j = 0; j < n; j++) {
-                double w = uni(&R->rng);
-                kid[j] = w * pa[j] + (1.0 - w) * pb[j];
+            /* The crossover gate draws nothing at 1: that keeps the default the same
+             * arithmetic in the same order as before the field existed, so no shipped
+             * trajectory moves. Below 1 the gate costs one draw per child, blend or not. */
+            if (R->tun.ga_crossover >= 1.0 || uni(&R->rng) < R->tun.ga_crossover) {
+                long c = (long)(uni(&R->rng) * (double)np);
+                long d = (long)(uni(&R->rng) * (double)np);
+                const double *pb = R->pop + (R->fit[c] < R->fit[d] ? c : d) * n;
+                for (j = 0; j < n; j++) {
+                    double w = uni(&R->rng);
+                    kid[j] = w * pa[j] + (1.0 - w) * pb[j];
+                }
+            } else {
+                memcpy(kid, pa, (size_t)n * sizeof *kid);
             }
             jitter(R, kid, kid,
                    jit * R->tun.ga_mutate * (1.0 - R->tun.ga_mutate_decay * frac));
@@ -308,7 +321,6 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
     if (!p->lo || !p->hi) return -1;
     for (j = 0; j < p->n; j++)
         if (!(p->lo[j] <= p->hi[j])) return -1;   /* also refuses NaN bounds */
-    if (!(b->jitter >= 0) || b->pop < 0) return -1;   /* also refuses NaN jitter */
     /* NULL and "auto" both take the default method, currently climb, tied to CJITTER_VERSION
      * because changing it changes what a seed reproduces. cjitter.h says which benchmark the
      * choice comes from and which one disagrees with it. */
@@ -316,16 +328,15 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
     for (mi = 0; cjitter_methods[mi] && strcmp(method, cjitter_methods[mi]); mi++)
         ;
     if (!cjitter_methods[mi]) return -1;
-    if (mi == 3 && b->pop == 1) return -1;   /* a population of one only re-scores a point */
 
     memset(&R, 0, sizeof R);
     R.tun = t ? *t : cjitter_tuning_default(p->n);
     if (!tuning_ok(&R.tun)) return -1;
     R.p = p;
     R.budget = b->evals;
-    R.npop = b->pop > 0 ? b->pop : GA_POP_DEFAULT;
+    R.npop = R.tun.pop;
     if (R.npop > b->evals) R.npop = b->evals;
-    jit = b->jitter > 0 ? b->jitter : 0.1;
+    jit = R.tun.jitter;
     cjitter_rng_seed(&R.rng, b->seed ? b->seed : 1u);
 
     R.x    = malloc((size_t)p->n * sizeof *R.x);
@@ -409,9 +420,9 @@ static double sign_p(long w, long n)
 }
 
 int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
-                          const cjitter_tuning *t, long seeds, void *stream)
+                          const cjitter_tuning *t, long seeds, FILE *stream)
 {
-    FILE *f = stream ? (FILE *)stream : stdout;
+    FILE *f = stream ? stream : stdout;
     double *sc = NULL, *v = NULL, *inf = NULL;
     cjitter_tuning eff;
     long verify;
@@ -502,7 +513,7 @@ done:
     return rc;
 }
 
-int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, void *stream)
+int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, FILE *stream)
 {
     return cjitter_compare_tuned(p, b, NULL, seeds, stream);
 }
