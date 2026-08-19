@@ -290,6 +290,53 @@ is why a visible defect survived every gate, four reviews and a paper.
    are thirty years of graph drawing and are the control for that case, exactly as uniform sampling
    is the control here.
 
+7. **`example/noise/`, and the join to `~/articles/bpnn/resolution.tex`.** This is QUESTIONS.md
+   item 1 next door, and `verify` was the prerequisite: a sweep for the noise level at which
+   search stops beating random, run through an estimator biased by that same noise, measures its
+   own artifact. Parameterise the family by the single dimensionless ratio **r = sigma_W /
+   sigma_B**, not by a raw sigma, because that is exactly what resolution.tex measured across 92
+   cells of NAS-Bench-101 and 201, together with the resolvability floor 2.77*sigma_W at one
+   training run. Then the sweep answers directly whether ANY cheap stochastic search could have
+   separated architectures at the noise those benchmarks actually carry, and the two papers
+   compose without a conversion step. Two of the author's own lines meeting in one figure, no GPU.
+   Note also `~/smbpann/validation/paper2/scratch_jsig_*.out`: an injected-noise sweep already
+   half-run on a fixed landscape, without the control arm at every noise level and without an
+   exact test, which is precisely the half this example would add.
+
+8. **Absorb `pairstat.c`.** `cjitter_compare` has one statistic, a 15-line sign test. The exact
+   engine already exists in this author's own `~/smbpann/validation/pairstat.c`: 606 lines of
+   C99, no dependencies, exact Wilcoxon signed-rank by dynamic programming, exact sign test,
+   exact McNemar, Hodges-Lehmann with a distribution-free rank CI, Holm over a declared family,
+   TOST, an MDE, and a `--selftest` that passes 16 of 16 against hand-computable cases. The
+   layout paper reports Wilcoxon, Holm, Hodges-Lehmann and MDE computed OUTSIDE the library, in
+   Python; the library cannot produce the statistics its own paper prints. The MDE matters most:
+   it is what makes "not shown" bound rather than assert, which is what this file already claims
+   the verdict does.
+
+9. **`B*` as an entry point.** The separation budget, the smallest budget at which a method
+   sweeps the control on the seed panel, is already defined, already used in the paper, and lives
+   in `articles/cjitter/data/analysis.py`. It is the quantity an engineer actually has a question
+   about. Making it a library call is what turns QUESTIONS.md item 2, a field guide by separation
+   budget across problem families, from a project into a loop.
+
+10. **A caller-supplied RNG stream.** Concrete blocker, not theory. `~/smbpann` accepts a change
+    only when it reproduces archived per-seed output bit for bit, and its `validation/paper2/ga.h`
+    is a compile-time template rather than function pointers *because* a shared search owns the
+    order in which random numbers are drawn. cjitter seeds its own `Rng` from `budget.seed`, so
+    it cannot be dropped into any smbpann probe without breaking that oracle. The probes are
+    where it would earn its keep: `emerge_relax.c:183` is literally a one-dimensional real search
+    done by a nine-point fixed grid, and `PROTOCOL.md` records that one unswept constant,
+    `g_padd = 0.006`, "was solely responsible for the headline in both probes."
+
+11. **An objective-indifference check.** The failure that recurs across every project in this
+    line, and the one nothing catches. `~/articles/smbpann2/tiling.tex` is retracted because its
+    energy term "was exactly indifferent to placement": an operator that copied nothing scored
+    26%, one that destroyed the target spacing scored 59%. This repository produced two of the
+    same class in one week, both recorded above: "length only ever breaks ties" was false at
+    every layout a search returns, and the repair that owned non-overlap did not enforce it. The
+    check is mechanical and cheap: perturb or destroy the property the objective claims to
+    reward, and assert the score responds. All three would have failed it on day one.
+
 ## What not to do
 
 Do not reopen the architecture-emergence line in bpnn's predecessor on the strength of this
