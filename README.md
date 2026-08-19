@@ -112,10 +112,10 @@ connectors re-route at every frame. `make movie` rebuilds it.
 
 The block is why the film is watchable, and the reason is worth stating. At the default
 block, one proposal moves all ten tables at once, so a proposal that seats one table beside
-its neighbour usually unseats another and is rejected for it: the run accepts 47 proposals
+its neighbour usually unseats another and is rejected for it: the run accepts 42 proposals
 out of 8000 and each one displaces the whole migration, which reads as ten tables
-teleporting together. At `block` 2 the same climb accepts 124, each moving one table, and
-finishes 39 percent lower (32293 against 46134). What the film shows is what the objective
+teleporting together. At `block` 2 the same climb accepts 158, each moving one table, and
+finishes 31 percent lower (32428 against 46665). What the film shows is what the objective
 was always asking for and the proposal shape could not express.
 
 ![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
@@ -149,40 +149,40 @@ score means only as much as its calibration line, and the run prints both:
 
     ---- straight diagonal edges ----
 
-    centroid         226609   (the centroid rule: each new table at its neighbours' centroid)
+    centroid         215066   (the centroid rule: each new table at its neighbours' centroid)
     human            218207   (the human placement, where the maintainer put them)
                20 crossings, 1943.96 penetration under this edge model
 
     method         median        range    wins    sign-p   vs random
-    random         233858      17935.1       -         - the control
-    climb          116506        39067    5/5     0.0312      better
-    anneal         104588      53550.5    5/5     0.0312      better
-    ga            72901.7      13540.3    5/5     0.0312      better
+    random         235567      39777.5       -         - the control
+    climb         90661.2        57623    5/5     0.0312      better
+    anneal         127730      72009.9    5/5     0.0312      better
+    ga            72070.3        14062    5/5     0.0312      better
 
     ---- orthogonal routed connectors ----
 
-    centroid         194470   (the centroid rule: each new table at its neighbours' centroid)
+    centroid         187368   (the centroid rule: each new table at its neighbours' centroid)
     human            157552   (the human placement, where the maintainer put them)
                27 crossings, 323 penetration under this edge model
 
     method         median        range    wins    sign-p   vs random
-    random         100056      26357.5       -         - the control
-    climb         46133.7      18661.7    5/5     0.0312      better
-    anneal        50691.7      23410.8    5/5     0.0312      better
-    ga            40118.6      4554.91    5/5     0.0312      better
+    random        80747.1      31356.4       -         - the control
+    climb         46317.4      4584.05    5/5     0.0312      better
+    anneal        47725.2      5057.59    5/5     0.0312      better
+    ga            38565.5         6006    5/5     0.0312      better
 
 Those are the default tuning's numbers, one proposal moving all twenty variables. `./erd
 --block 2` moves one table per proposal instead and reports, under the routed model:
 
     method         median        range    wins    sign-p   vs random
-    random         100056      26357.5       -         - the control
-    climb         32292.7      178.093    5/5     0.0312      better
-    anneal        32578.7         1595    5/5     0.0312      better
-    ga              39571      23871.9    5/5     0.0312      better
+    random        80747.1      31356.4       -         - the control
+    climb         32572.2      1791.87    5/5     0.0312      better
+    anneal        32916.8      2128.04    5/5     0.0312      better
+    ga            53003.4      18528.4    5/5     0.0312      better
 
-Read the range column before the medians. Climb's spread over five seeds falls from 18662 to
-178: the blocked search finds substantially the same layout whichever seed it is given, which
-is worth more in a tool run once than the 30 percent the median moved. The genetic algorithm
+Read the range column beside the medians. Climb's median falls 30 percent and its spread over
+five seeds falls from 4584 to 1792, so the blocked search returns much the same layout
+whichever seed it is given, which in a tool run once is worth as much as the median. The genetic algorithm
 is the exception and it is not a bug: only its mutation is blocked while crossover still
 blends every coordinate, so a narrow block leaves it a weak-mutation GA. On the label problem
 the same change is decisive rather than incremental --- `./labels 90 20000 7 2` puts climb,
@@ -194,8 +194,8 @@ under both: a table at its neighbours' centroid lands on the connectors running 
 neighbours. Read the human rows through the calibration lines: most of the human's score in
 each section is that edge model failing to reproduce their real connectors, which is why even
 the control's median outscores them in the routed section. The comparison that survives is
-the feasibility pair. The routed seed-1 search layout reaches 0.4 penetration and 65 crossings;
-the human's routes to 323 and 27. Each is winning a different half of what the tool and the
+the feasibility pair. The routed seed-1 search layout reaches 0 penetration and 48 crossings
+(23 at block 2); the human's routes to 323 and 27. Each is winning a different half of what the tool and the
 person jointly achieved as 0 and 0, and closing that gap is the router's open problem, not
 the search's. Connectors leave a table's border at that edge's own attachment point, spread
 by the table's degree, so no two connectors ever share a segment: an edge joins two tables
@@ -227,7 +227,21 @@ varies, and the layout it picks is the one length prefers. Tier by orders of mag
 go and look at what the tiers actually weigh at the answer.
 
 Node overlap and canvas bounds are hard constraints in the repair callback, for the reason
-`cjitter.h` gives at the `cjitter_repair` typedef.
+`cjitter.h` gives at the `cjitter_repair` typedef. That reason has a precondition worth
+stating, because this example violated it for a year: putting a constraint in the repair
+makes it hard *only if the repair actually enforces it*. This one pushed each new table out
+of its neighbours in a single ordered walk, so a table repaired early could be shoved back
+into an overlap by one repaired later, and nothing looked again. It shipped infeasible
+layouts as answers, on four of five seeds, with tables through each other by up to 121 units.
+
+The search was not merely tolerating that, it was hunting for it: overlap costs nothing in
+the objective, and tables stacked on top of each other have short connectors, which is
+exactly what an objective whose surviving term is length wants. A repair that fails silently
+does not weaken a hard constraint, it hands the search a reward. The repair now relaxes the
+whole layout until a sweep moves nothing and seats anything still stuck by searching outward
+for the nearest free spot, and it keeps 12 units of clearance rather than zero, because 12 is
+the tightest gap in the maintainer's own accepted diagram. If you put a constraint in a
+repair, measure the returned answers against it; do not assume.
 
 ## Build and test
 

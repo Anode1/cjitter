@@ -38,8 +38,9 @@ typedef char erd_edges_fit[(ERD_NEDGE <= MAXE) ? 1 : -1];
 typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
 
 /* The example's constants, in one place. W_TIER separates the objective's tiers by two orders
- * of magnitude; PUSH_PASSES bounds the repair's overlap resolution; the rest are the shipped
- * budget, and every pinned number in tests/cli.sh and the README is a function of them.
+ * of magnitude; NODE_GAP, PUSH_SWEEPS, SEAT_STEP and SEAT_RINGS are the repair's; the rest
+ * are the shipped budget, and every pinned number in tests/cli.sh and the README is a
+ * function of them.
  *
  * W_TIER's two orders of magnitude are a weight, not a magnitude, and this comment used to
  * claim they made length a tie-breaker. Measured at a returned layout they do not: the
@@ -47,7 +48,10 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
  * connectors of a few hundred units each, so length carries 81 to 90 percent of what varies
  * and picks the answer. The tiering is still right; the inference from it was not. */
 #define W_TIER      100.0   /* penetration and crossings, against length at 1 */
-#define PUSH_PASSES 4       /* overlap push-out sweeps per repaired table */
+#define NODE_GAP    12.0    /* clearance kept between table borders, in canvas units */
+#define PUSH_SWEEPS 24      /* whole-layout push-out sweeps before the repair gives up */
+#define SEAT_STEP   24.0    /* grid step of the nearest-free-seat fallback */
+#define SEAT_RINGS  48      /* how far out that fallback will look */
 #define EVALS       8000
 #define SEEDS       5
 #define JITTER      0.25    /* first move size, as a fraction of the canvas */
@@ -448,30 +452,119 @@ static void oncanvas(const Erd *g, long k, double *px, double *py)
     if (*py > g->ch - g->h[k]/2) *py = g->ch - g->h[k]/2;
 }
 
-/* Hard: on the canvas, and not overlapping any table. Enforced by moving the proposal, so an
- * unreadable diagram is never a candidate at all. The canvas bound holds by construction at
- * every step; the push-out is best-effort within it, over a fixed number of passes. */
+/* Hard: on the canvas, and NODE_GAP clear of every other table. Enforced by moving the
+ * proposal, so an unreadable diagram is never a candidate at all.
+ *
+ * NODE_GAP is not a taste: 12 units is the tightest clearance in the maintainer's own accepted
+ * layout, whose next three are 14, 14 and 17, so it is the separation a person signed off on.
+ * Touching borders read as one merged box on screen, which is the failure this prevents.
+ *
+ * The sweep structure is a bug fix and the comment stays as the witness. This used to run a
+ * fixed four passes per table inside a single ordered walk over the new tables, so a table
+ * repaired early could be pushed back into an overlap by one repaired later and never looked
+ * at again, and a clamp back onto the canvas could re-seat a table inside a neighbour with
+ * nothing to catch it. It shipped overlapping layouts as feasible: on this instance at the
+ * shipped default, four of five seeds returned a best layout with tables through each other,
+ * the deepest by 121 units, and the centroid heuristic's own layout overlapped by 91. The
+ * outer loop now sweeps the whole layout until a sweep moves nothing, so a late push is seen
+ * by the next sweep. It is still best-effort: PUSH_SWEEPS bounds the work, geometry can make
+ * the gap unsatisfiable, and a caller that needs the guarantee must check. */
+/* Does table K at (PX, PY) clear every other table by NODE_GAP? */
+static int clear_at(const Erd *g, const double *v, long k, double px, double py)
+{
+    long i;
+    for (i = 0; i < g->n; i++) {
+        double qx, qy;
+        if (i == k) continue;
+        pos(g, v, i, &qx, &qy);
+        if ((g->w[k] + g->w[i]) / 2 + NODE_GAP - fabs(px - qx) > 0 &&
+            (g->h[k] + g->h[i]) / 2 + NODE_GAP - fabs(py - qy) > 0) return 0;
+    }
+    return 1;
+}
+
+/* The stubborn case: a table wedged between frozen neighbours, where pushing out of one puts
+ * it inside the next and the frozen ones cannot yield. Walk outward from where it sits, in
+ * rings on a coarse grid, and take the first seat that clears everything: nearest-free-space,
+ * which is what a person does with a table that will not fit. Deterministic in the offset
+ * order, so a seed still reproduces. Returns 0 if no ring held a seat, which on a canvas 26%
+ * covered by tables has not been observed but is not excluded. */
+static int reseat(const Erd *g, const double *v, long k, double *px, double *py)
+{
+    long ring, dx, dy;
+    for (ring = 1; ring <= SEAT_RINGS; ring++)
+        for (dy = -ring; dy <= ring; dy++)
+            for (dx = -ring; dx <= ring; dx++) {
+                double cx, cy;
+                if (dx > -ring && dx < ring && dy > -ring && dy < ring) continue; /* ring edge */
+                cx = *px + (double)dx * SEAT_STEP;
+                cy = *py + (double)dy * SEAT_STEP;
+                if (cx < g->w[k]/2 || cx > g->cw - g->w[k]/2) continue;
+                if (cy < g->h[k]/2 || cy > g->ch - g->h[k]/2) continue;
+                if (clear_at(g, v, k, cx, cy)) { *px = cx; *py = cy; return 1; }
+            }
+    return 0;
+}
+
 static void legal(double *v, void *ctx)
 {
     Erd *g = ctx;
-    long k, i, pass;
-    for (k = g->nfixed; k < g->n; k++) {
-        double *px = &v[2 * (k - g->nfixed)], *py = &v[2 * (k - g->nfixed) + 1];
-        oncanvas(g, k, px, py);
-        for (pass = 0; pass < PUSH_PASSES; pass++)
+    long k, i, sweep;
+    int moved = 1;
+    for (k = g->nfixed; k < g->n; k++)
+        oncanvas(g, k, &v[2 * (k - g->nfixed)], &v[2 * (k - g->nfixed) + 1]);
+    /* Resultant push, not sequential snapping: a table takes one step against the sum of its
+     * overlaps per sweep. Snapping out of each neighbour in turn made the last neighbour win
+     * and sent tables oscillating between two frozen boxes until the pass count ran out. */
+    for (sweep = 0; sweep < PUSH_SWEEPS && moved; sweep++) {
+        moved = 0;
+        for (k = g->nfixed; k < g->n; k++) {
+            double *px = &v[2 * (k - g->nfixed)], *py = &v[2 * (k - g->nfixed) + 1];
+            double sx = 0, sy = 0;
             for (i = 0; i < g->n; i++) {
                 double qx, qy, ox, oy;
                 if (i == k) continue;
                 pos(g, v, i, &qx, &qy);
-                ox = (g->w[k] + g->w[i]) / 2 - fabs(*px - qx);
-                oy = (g->h[k] + g->h[i]) / 2 - fabs(*py - qy);
-                if (ox > 0 && oy > 0) {          /* push out along the shallower axis */
-                    if (ox < oy) *px += (*px < qx ? -ox : ox);
-                    else         *py += (*py < qy ? -oy : oy);
-                    oncanvas(g, k, px, py);
+                ox = (g->w[k] + g->w[i]) / 2 + NODE_GAP - fabs(*px - qx);
+                oy = (g->h[k] + g->h[i]) / 2 + NODE_GAP - fabs(*py - qy);
+                if (ox > 0 && oy > 0) {          /* out along this pair's shallower axis */
+                    if (ox < oy) sx += (*px < qx ? -ox : ox);
+                    else         sy += (*py < qy ? -oy : oy);
                 }
             }
+            if (sx != 0 || sy != 0) {
+                *px += sx; *py += sy;
+                oncanvas(g, k, px, py);
+                moved = 1;
+            }
+        }
     }
+    /* Whatever the relaxation could not seat, seat by search. */
+    for (k = g->nfixed; k < g->n; k++) {
+        double *px = &v[2 * (k - g->nfixed)], *py = &v[2 * (k - g->nfixed) + 1];
+        if (!clear_at(g, v, k, *px, *py)) reseat(g, v, k, px, py);
+    }
+}
+
+/* The smallest clearance between any two tables: negative means they overlap. Printed beside
+ * every returned layout because the constraint it checks lives in the repair, where a silent
+ * failure looks exactly like success; AGENTS.md's repair section is the story of the year this
+ * went unmeasured. tests/cli.sh pins the printed value at or above NODE_GAP. */
+static double min_clearance(const Erd *g, const double *v)
+{
+    double worst = 1e30;
+    long i, j;
+    for (i = 0; i < g->n; i++)
+        for (j = i + 1; j < g->n; j++) {
+            double px, py, qx, qy, gx, gy, c;
+            pos(g, v, i, &px, &py);
+            pos(g, v, j, &qx, &qy);
+            gx = fabs(px - qx) - (g->w[i] + g->w[j]) / 2;
+            gy = fabs(py - qy) - (g->h[i] + g->h[j]) / 2;
+            c = gx > gy ? gx : gy;         /* separated when either axis clears */
+            if (c < worst) worst = c;
+        }
+    return worst;
 }
 
 /* The control that might simply win: each new table at the centroid of its neighbours. */
@@ -710,6 +803,8 @@ int main(int argc, char **argv)
                 printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
             layout_report(&g, x, rt, &nc, &pen);
             printf("under this edge model: %ld crossings, %.6g penetration\n", nc, pen);
+            printf("closest two tables: %.6g units apart (the repair keeps %g)\n",
+                   min_clearance(&g, x), NODE_GAP);
         }
     }
     return 0;

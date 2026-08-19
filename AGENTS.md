@@ -43,7 +43,7 @@ plus noise is jitter, which is why the name fits the whole family.
     make lib        # libcjitter.a; install/uninstall honor PREFIX (default /usr/local)
     make check      # ut + cliut -- the commit gate
     make ut         # unit suite, 74 checks: the library's contract, called as functions
-    make cliut      # black-box, 59 checks: the built examples through a shell
+    make cliut      # black-box, 61 checks: the built examples through a shell
     make ut-asan    # both suites under AddressSanitizer
     make ut-ubsan   # both suites under UBSan
     make pedantic   # -pedantic -Wextra over every source; must be clean
@@ -129,6 +129,33 @@ and 323 at present, with border anchoring, per-edge attachment slots, and sequen
 aware of every connector already placed), and no score comparison against the human means
 more than that line allows. Closing the remainder, more bends and a grid router, is the open
 problem the router owns.
+
+## The repair, and why it is the thing to check first
+
+A hard constraint in `repair` is hard only if the repair enforces it, and `example/erd`'s did
+not for a year. It pushed each new table out of its neighbours in one ordered walk of four
+passes, so a table repaired early could be shoved back by one repaired later with nothing
+looking again, and a clamp back onto the canvas could re-seat a table inside a neighbour. It
+returned infeasible layouts as best on four of five seeds, tables through each other by up to
+121 units; the centroid heuristic's own layout overlapped by 91; 965 of 1000 random layouts
+came out of it still overlapping, every residual one a new table inside a FROZEN table, which
+is the case the pairwise push cannot solve because the frozen side will not yield.
+
+What made it costly rather than cosmetic: overlap has no term in the objective, so a stacked
+layout is free, and stacked tables have short connectors, which is what the objective's
+surviving term rewards. The search was not tolerating the bug, it was mining it. A repair that
+fails silently does not soften a hard constraint; it pays for violating it.
+
+The fix is three things and the third is the one that mattered: sweep the whole layout until a
+sweep moves nothing rather than walking it once, push against the resultant of all overlaps
+rather than snapping out of each neighbour in turn (which let the last neighbour win and set
+tables oscillating between two frozen boxes), and seat anything still stuck by walking outward
+on a coarse grid to the nearest free position. NODE_GAP is 12 units because 12 is the tightest
+clearance in the maintainer's own accepted layout, whose next three are 14, 14 and 17.
+
+The lesson generalises past this example: when a constraint lives in a repair, write the check
+that the RETURNED answers satisfy it, and run it. Nothing in ut or cliut had that check, which
+is why a visible defect survived every gate, four reviews and a paper.
 
 ## What is open, in the order to take it
 
