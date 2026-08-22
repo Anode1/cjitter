@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Vasili Gavrilov. BSD 2-Clause; see LICENSE.
 #
 #   make | lib | check | ut | cliut | ut-asan | ut-ubsan | pedantic | examples
+#   make station | profile        the diagram instrument, and its table over the corpora
 #   make install [PREFIX=/usr/local] | uninstall | clean
 SHELL = /bin/sh
 
@@ -45,7 +46,12 @@ uninstall:
 c/%.o: c/%.c $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-examples: labels erd
+examples: labels erd station
+
+# The profile: the directional test over every corpus and every declared energy, as the
+# README's table. Deterministic, about two minutes, not part of check.
+profile: station
+	python3 example/diagrams/profile.py --md
 
 # The sixty-draws pilot: exploratory, unpinned, the instrument for QUESTIONS item 8.
 sixty: example/sixty/sixty.c $(OBJ) $(HEADERS)
@@ -75,6 +81,13 @@ labels: example/labels/labels.c $(OBJ) $(HEADERS)
 erd: example/erd/erd.c $(OBJ) $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ example/erd/erd.c $(OBJ) $(LIBM) $(LDLIBS)
 
+# station: which aesthetic criteria hold a hand-drawn diagram layout. The directional test
+# needs no search; the descent and the control will, which is why it links the library.
+DIAG_SRC = example/diagrams/energy.c example/diagrams/corpus.c example/diagrams/station.c
+DIAG_HDR = example/diagrams/energy.h example/diagrams/corpus.h
+station: $(DIAG_SRC) $(DIAG_HDR) $(OBJ) $(HEADERS)
+	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ $(DIAG_SRC) $(OBJ) $(LIBM) $(LDLIBS)
+
 # ut: in-process unit tests of the library's contract: refusals, the exact budget, determinism,
 # the box and the repair invariant. Built from sources, not objects, so a header change rebuilds.
 ut: cjitter_ut
@@ -86,6 +99,7 @@ cjitter_ut: tests/tests.c $(SRC) $(HEADERS)
 # an exit code, a refusal message or whether a whole run reproduces byte for byte; these can.
 cliut: examples
 	sh tests/cli.sh
+	sh tests/diagrams.sh
 
 # The sanitizers run both suites, because the examples' argument handling is only reachable
 # through the shell. -fno-sanitize-recover is what makes UBSan a gate rather than a report.
@@ -94,23 +108,27 @@ ut-asan: $(HEADERS)
 	$(CC) $(PROJ) $(SAN) -fsanitize=address -o cjitter_ut_asan tests/tests.c $(SRC) $(LIBM) && ./cjitter_ut_asan
 	$(CC) $(PROJ) $(SAN) -fsanitize=address -o labels_asan example/labels/labels.c $(SRC) $(LIBM)
 	$(CC) $(PROJ) $(SAN) -fsanitize=address -o erd_asan example/erd/erd.c $(SRC) $(LIBM)
+	$(CC) $(PROJ) $(SAN) -fsanitize=address -o station_asan $(DIAG_SRC) $(SRC) $(LIBM)
 	LABELS_BIN=$(CURDIR)/labels_asan ERD_BIN=$(CURDIR)/erd_asan sh tests/cli.sh
+	STATION_BIN=$(CURDIR)/station_asan sh tests/diagrams.sh
 ut-ubsan: $(HEADERS)
 	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o cjitter_ut_ubsan tests/tests.c $(SRC) $(LIBM) && ./cjitter_ut_ubsan
 	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o labels_ubsan example/labels/labels.c $(SRC) $(LIBM)
 	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o erd_ubsan example/erd/erd.c $(SRC) $(LIBM)
+	$(CC) $(PROJ) $(SAN) -fsanitize=undefined -fno-sanitize-recover=all -o station_ubsan $(DIAG_SRC) $(SRC) $(LIBM)
 	LABELS_BIN=$(CURDIR)/labels_ubsan ERD_BIN=$(CURDIR)/erd_ubsan sh tests/cli.sh
+	STATION_BIN=$(CURDIR)/station_ubsan sh tests/diagrams.sh
 
 # -Werror is what makes "must be clean" a gate: gcc exits 0 on warnings, so without it this
 # target only enforced its claim on whoever read the scrollback.
 pedantic: $(HEADERS)
 	@rc=0; tmp=`mktemp -d`; \
-	for f in $(SRC) tests/tests.c example/labels/labels.c example/erd/erd.c example/erd/erd_movie.c example/sixty/sixty.c; do \
+	for f in $(SRC) tests/tests.c example/labels/labels.c example/erd/erd.c example/erd/erd_movie.c example/sixty/sixty.c $(DIAG_SRC); do \
 	    $(CC) $(PROJ) -pedantic -Wextra -Werror -O2 -c "$$f" -o "$$tmp/p.o" || rc=1; \
 	done; \
 	rm -rf "$$tmp"; \
 	test $$rc -eq 0 && echo "pedantic: clean"; exit $$rc
 
 clean:
-	rm -f c/*.o libcjitter.a labels erd cjitter_ut cjitter_ut_asan cjitter_ut_ubsan \
-	      labels_asan erd_asan labels_ubsan erd_ubsan
+	rm -f c/*.o libcjitter.a labels erd station cjitter_ut cjitter_ut_asan cjitter_ut_ubsan \
+	      labels_asan erd_asan station_asan labels_ubsan erd_ubsan station_ubsan

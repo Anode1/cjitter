@@ -50,3 +50,9 @@ and energy; stat8.c is current, ALIGN_DEF selects A1/A2/A3), fitd.py and fitw.py
 fitting), missing.py and missing2.py (one added term at a time), feednull*.py (the null and
 the power check), robust.py, notes.md (citation log).
 Raw archives: ~/corpora/diagrams/ (not in git).
+
+Defect found 2026-08-22 when the corpora were rebuilt for station: parse_sbgn.py and
+parse_bpmn.py did not take the largest connected component. In the 15 to 40 node band, 126
+of 180 Reactome graphs and 68 of 161 BPMN graphs were unions of fragments, and every pilot
+number for those two corpora was measured on them. data/make_corpus.py takes the component
+itself; the bands are now 305, 248 and 147 graphs.

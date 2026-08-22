@@ -108,6 +108,13 @@ table per proposal:
 [example/erd/README.md](example/erd/README.md) has the full walkthrough: both edge models,
 the measured tables, the calibration lines, and what the block does to each method.
 
+**`example/diagrams/`** turns the instrument around. Instead of descending an energy to
+place objects, it starts from where a person placed them, 700 hand-drawn pathway and process
+diagrams, and asks of each aesthetic criterion whether any small move of any box would lower
+it. People draw at a minimum of overlap and crossings and nowhere near one of uniform edge
+length or stress; a tool's layout of the same graphs is the reverse.
+[example/diagrams/README.md](example/diagrams/README.md) has the table.
+
 ## Build and test
 
     make            build both examples

@@ -1,0 +1,29 @@
+# Three hand-computable layouts for tests/diagrams.sh. Extents are already 1, so rescaling
+# is the identity and the numbers below can be checked by hand.
+# square: a unit square with both diagonals. The diagonals cross (C = 1/6), each is at 45
+# degrees (R = 1/6), the sides are length 1 and the diagonals sqrt 2 with median 1.
+G square 4 6
+V 0 0 0.1 0.1
+V 1 0 0.1 0.1
+V 1 1 0.1 0.1
+V 0 1 0.1 0.1
+E 0 1
+E 1 2
+E 2 3
+E 3 0
+E 0 2
+E 1 3
+# row: three nodes in a line, equally spaced. Every term is zero except A3 and the kernel.
+G row 3 2
+V 0 0 0.1 0.1
+V 0.5 0 0.1 0.1
+V 1 0 0.1 0.1
+E 0 1
+E 1 2
+# overlap: two boxes of side 0.2 whose centres are 0.05 apart, both joined to a far node.
+G overlap 3 2
+V 0 0 0.2 0.2
+V 0.05 0 0.2 0.2
+V 1 1 0.2 0.2
+E 0 2
+E 1 2

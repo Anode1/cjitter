@@ -91,8 +91,17 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
                         README.md there carries the walkthrough and the measured tables
     example/erd/data/   the real schema, anonymized: ERD.mwb, both revisions as PNG, the
                         geometry as JSON, and PROVENANCE.md for what the anonymization changed
+    example/diagrams/   which aesthetic criteria hold a hand-drawn diagram layout: energy.c
+                        (one function per term), corpus.c (the reader), station.c (the
+                        directional test; the descent and the control follow), profile.py
+                        (the table over every corpus), data/ (the text corpora, hand and
+                        neato, and the hand-computable fixture), pilot/ (the superseded
+                        exploratory run, kept with its defects declared). The pre-registration
+                        it answers is in the articles repository, ~/articles/cjitter.
     tests/tests.c       unit suite: refusals, the exact budget, determinism, box and repair
     tests/cli.sh        black-box: exit codes, refusal messages, runs byte-identical over reruns
+    tests/diagrams.sh   black-box for station: the fixture's terms by hand, the directional
+                        verdicts, order independence, refusals, no transcendental libm
 
 ## The verdict
 
