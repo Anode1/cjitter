@@ -50,15 +50,15 @@ same graphs. In brackets, for a single term, the median value of that term at th
 
 | energy | WikiPathways hand | Reactome hand | BPMN hand | WikiPathways neato | Reactome neato | BPMN neato |
 |---|---|---|---|---|---|---|
-| crossings alone | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
-| overlap alone | 1.00 | 1.00 | 1.00 | 0.60 | 0.76 | 0.39 |
-| length alone | 0.03 | 0.04 | 0.06 | 0.26 | 0.41 | 0.43 |
-| stress alone | 0.00 | 0.00 | 0.00 | 0.07 | 0.08 | 0.12 |
-| orthogonality alone | 0.16 | 0.05 | 0.41 | 0.00 | 0.00 | 0.00 |
-| alignment A1 alone | 0.44 | 0.16 | 0.80 | 0.04 | 0.05 | 0.04 |
-| alignment A3 alone | 0.19 | 0.09 | 0.27 | 0.00 | 0.00 | 0.00 |
-| gridiness alone | 0.87 | 0.65 | 0.90 | 0.78 | 0.77 | 0.78 |
-| node-edge alone | 0.76 | 0.85 | 0.86 | 0.89 | 0.93 | 0.91 |
+| crossings alone | 1.00 (0.038) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
+| overlap alone | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.60 (0.030) | 0.76 (0.022) | 0.39 (0.082) |
+| length alone | 0.03 (0.376) | 0.04 (0.468) | 0.06 (0.549) | 0.26 (0.012) | 0.41 (0.005) | 0.43 (0.005) |
+| stress alone | 0.00 (0.240) | 0.00 (0.240) | 0.00 (0.224) | 0.07 (0.060) | 0.08 (0.054) | 0.12 (0.031) |
+| orthogonality alone | 0.16 (0.193) | 0.05 (0.225) | 0.41 (0.140) | 0.00 (0.280) | 0.00 (0.277) | 0.00 (0.286) |
+| alignment A1 alone | 0.44 (0.003) | 0.16 (0.004) | 0.80 (0.001) | 0.04 (0.011) | 0.05 (0.009) | 0.04 (0.011) |
+| alignment A3 alone | 0.19 (0.284) | 0.09 (0.300) | 0.27 (0.214) | 0.00 (0.446) | 0.00 (0.430) | 0.00 (0.452) |
+| gridiness alone | 0.87 (0.424) | 0.65 (0.640) | 0.90 (0.231) | 0.78 (1.000) | 0.77 (1.000) | 0.78 (1.000) |
+| node-edge alone | 0.76 (0.022) | 0.85 (0.006) | 0.86 (0.006) | 0.89 (0.000) | 0.93 (0.000) | 0.91 (0.000) |
 | C+O | 1.00 | 1.00 | 1.00 | 0.60 | 0.76 | 0.39 |
 | C+O+L (1,1,1) | 0.04 | 0.04 | 0.07 | 0.18 | 0.35 | 0.24 |
 | C+O+S | 0.00 | 0.00 | 0.00 | 0.04 | 0.07 | 0.05 |
@@ -68,11 +68,10 @@ same graphs. In brackets, for a single term, the median value of that term at th
 | C+O+grid | 0.83 | 0.64 | 0.82 | 0.45 | 0.52 | 0.30 |
 | C+O+N | 0.76 | 0.84 | 0.80 | 0.55 | 0.71 | 0.38 |
 
-(Table from `make profile` of 2026-08-22; the bracketed term values are printed by the
-current profile.py and are to be pasted in on the next run.)
 
-Read down the hand columns. Overlap and crossings hold every box: people satisfy them
-exactly, and at radius 0.02 there is no crossing a single box can remove. Uniform edge
+Read down the hand columns. Overlap holds every box and is satisfied (value 0): people never
+let boxes overlap. Crossings hold every box in both layouts, because at radius 0.02 no
+single box can remove one; the value says the hand layouts have few to remove. Uniform edge
 length and stress hold almost none: every box has a move that evens the lengths, which is
 what a tool would do first and what the person did not. The three-term energy tools use,
 C+O+L, inherits the length term's verdict, which is what an earlier version of this study
