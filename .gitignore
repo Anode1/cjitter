@@ -15,3 +15,6 @@ c/*.o
 movie_frames/
 /libcjitter.a
 /erd_straight.svg
+station
+station_asan
+station_ubsan
