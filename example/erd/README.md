@@ -65,11 +65,11 @@ score means only as much as its calibration line, and the run prints both:
     human            218207   (the human placement, where the maintainer put them)
                20 crossings, 1943.96 penetration under this edge model
 
-    method         median        range    wins    sign-p   vs random
-    random         235567      39777.5       -         - the control
-    climb         90661.2        57623    5/5     0.0312      better
-    anneal         127730      72009.9    5/5     0.0312      better
-    ga            72070.3        14062    5/5     0.0312      better
+    method         median        range    wins    sign-p      holm   vs random
+    random         235567      39777.5       -         -         - the control
+    climb         90661.2        57623    5/5     0.0312    0.0938   not shown
+    anneal         127730      72009.9    5/5     0.0312    0.0938   not shown
+    ga            72070.3        14062    5/5     0.0312    0.0938   not shown
 
     ---- orthogonal routed connectors ----
 
@@ -77,20 +77,28 @@ score means only as much as its calibration line, and the run prints both:
     human            157552   (the human placement, where the maintainer put them)
                27 crossings, 323 penetration under this edge model
 
-    method         median        range    wins    sign-p   vs random
-    random        80747.1      31356.4       -         - the control
-    climb         46317.4      4584.05    5/5     0.0312      better
-    anneal        47725.2      5057.59    5/5     0.0312      better
-    ga            38565.5         6006    5/5     0.0312      better
+    method         median        range    wins    sign-p      holm   vs random
+    random        80747.1      31356.4       -         -         - the control
+    climb         46317.4      4584.05    5/5     0.0312    0.0938   not shown
+    anneal        47725.2      5057.59    5/5     0.0312    0.0938   not shown
+    ga            38565.5         6006    5/5     0.0312    0.0938   not shown
+
+Every verdict here reads "not shown", and that is the correction working rather than
+the methods failing. Five seeds put the exact one-sided sign test's floor at 0.0312, and
+three methods are tested against the one control, so the smallest Holm-corrected value a
+five-seed panel can produce is 3 x 0.0312 = 0.0938. Five seeds cannot support three
+simultaneous claims at 5%, whatever the data. The medians and ranges still say which method
+is ahead; what the panel cannot do is certify it. The labels example, at seven seeds, clears
+the line.
 
 Those are the default tuning's numbers, one proposal moving all twenty variables. `./erd
 --block 2` moves one table per proposal instead and reports, under the routed model:
 
-    method         median        range    wins    sign-p   vs random
-    random        80747.1      31356.4       -         - the control
-    climb         32572.2      1791.87    5/5     0.0312      better
-    anneal        32916.8      2128.04    5/5     0.0312      better
-    ga            53003.4      18528.4    5/5     0.0312      better
+    method         median        range    wins    sign-p      holm   vs random
+    random        80747.1      31356.4       -         -         - the control
+    climb         32572.2      1791.87    5/5     0.0312    0.0938   not shown
+    anneal        32916.8      2128.04    5/5     0.0312    0.0938   not shown
+    ga            53003.4      18528.4    5/5     0.0312    0.0938   not shown
 
 Read the range column beside the medians. Climb's median falls 30 percent and its spread over
 five seeds falls from 4584 to 1792, so the blocked search returns much the same layout

@@ -423,7 +423,8 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
                           const cjitter_tuning *t, long seeds, FILE *stream)
 {
     FILE *f = stream ? stream : stdout;
-    double *sc = NULL, *v = NULL, *inf = NULL;
+    double *sc = NULL, *v = NULL, *inf = NULL, *pv = NULL, *adj = NULL;
+    long *wn = NULL, *nn = NULL;
     cjitter_tuning eff;
     long verify;
     uint32_t base;
@@ -440,7 +441,11 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
     sc = malloc((size_t)nm * (size_t)seeds * sizeof *sc);
     v  = malloc((size_t)seeds * sizeof *v);
     inf = malloc((size_t)nm * (size_t)seeds * sizeof *inf);
-    if (!sc || !v || !inf) goto done;
+    pv  = malloc((size_t)nm * sizeof *pv);
+    adj = malloc((size_t)nm * sizeof *adj);
+    wn  = malloc((size_t)nm * sizeof *wn);
+    nn  = malloc((size_t)nm * sizeof *nn);
+    if (!sc || !v || !inf || !pv || !adj || !wn || !nn) goto done;
 
     /* The same seed panel for every method, based on the caller's seed, so the per-seed
      * differences below are paired and a fresh panel is one seed away. */
@@ -459,8 +464,41 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
             inf[m * seeds + s] = r.inflation;
         }
 
-    fprintf(f, "%-8s %12s %12s %7s %9s %11s", "method",
-            verify > 0 ? "median(ver)" : "median", "range", "wins", "sign-p", "vs random");
+    /* Every non-control method is tested against the same control, so the three tests are
+     * one family: at 5% each the chance of calling at least one of three null methods better
+     * is 1 - 0.95^3, about 14%. The verdict column is therefore read off the Holm-adjusted
+     * value, and the raw sign-p is printed beside it so both are visible. */
+    for (m = 1; m < nm; m++) {
+        long wins = 0, n = 0;
+        for (s = 0; s < seeds; s++) {
+            if (sc[m * seeds + s] == sc[s]) continue;
+            n++;
+            if (sc[m * seeds + s] < sc[s]) wins++;
+        }
+        wn[m] = wins; nn[m] = n;
+        pv[m] = n > 0 ? sign_p(wins, n) : 1.0;
+    }
+    {   /* Holm step-down over the nm-1 comparisons, monotone by construction. */
+        long k, i, done_n = 0;
+        double prev = 0.0;
+        for (m = 1; m < nm; m++) adj[m] = -1.0;
+        for (k = 1; k < nm; k++) {
+            long besti = -1;
+            for (i = 1; i < nm; i++)
+                if (adj[i] < 0 && (besti < 0 || pv[i] < pv[besti])) besti = i;
+            if (besti < 0) break;
+            {
+                double a = (double)(nm - 1 - done_n) * pv[besti];
+                if (a > 1.0) a = 1.0;
+                if (a < prev) a = prev;
+                adj[besti] = a; prev = a; done_n++;
+            }
+        }
+    }
+
+    fprintf(f, "%-8s %12s %12s %7s %9s %9s %11s", "method",
+            verify > 0 ? "median(ver)" : "median", "range", "wins", "sign-p", "holm",
+            "vs random");
     if (verify > 0) fprintf(f, " %12s", "inflation");
     fprintf(f, "\n");
     for (m = 0; m < nm; m++) {
@@ -470,21 +508,13 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
         med = v[(seeds - 1) / 2];
         range = v[seeds - 1] - v[0];
         if (m == 0) {
-            fprintf(f, "%-8s %12.6g %12.6g %7s %9s %11s",
-                    cjitter_methods[m], med, range, "-", "-", "the control");
+            fprintf(f, "%-8s %12.6g %12.6g %7s %9s %9s %11s",
+                    cjitter_methods[m], med, range, "-", "-", "-", "the control");
         } else {
             /* Wins on the paired per-seed differences; a tie counts for neither side. */
-            long wins = 0, n = 0;
-            double pval;
-            for (s = 0; s < seeds; s++) {
-                if (sc[m * seeds + s] == sc[s]) continue;
-                n++;
-                if (sc[m * seeds + s] < sc[s]) wins++;
-            }
-            pval = n > 0 ? sign_p(wins, n) : 1.0;
-            fprintf(f, "%-8s %12.6g %12.6g %4ld/%-2ld %9.3g %11s",
-                    cjitter_methods[m], med, range, wins, n, pval,
-                    pval <= 0.05 ? "better" : "not shown");
+            fprintf(f, "%-8s %12.6g %12.6g %4ld/%-2ld %9.3g %9.3g %11s",
+                    cjitter_methods[m], med, range, wn[m], nn[m], pv[m], adj[m],
+                    adj[m] <= 0.05 ? "better" : "not shown");
         }
         if (verify > 0) {
             memcpy(v, inf + m * seeds, (size_t)seeds * sizeof *v);
@@ -495,9 +525,11 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
     }
     fprintf(f, "\n%ld seeds at %ld evaluations each, every method on the same seeds. A method\n"
                "is better when it beats the control on enough of them that a fair coin explains\n"
-               "it with probability at most 5%% (the sign-p column, an exact one-sided sign\n"
-               "test on the paired per-seed differences). not shown is a failure to demonstrate\n"
-               "improvement, and says nothing about equality.\n", seeds, b->evals);
+               "it with probability at most 5%% after correcting for the number of methods\n"
+               "compared: the holm column. Beside it, sign-p is the uncorrected\n"
+               "exact one-sided sign test on the paired per-seed differences. not shown is a\n"
+               "failure to demonstrate improvement, and says nothing about equality.\n",
+               seeds, b->evals);
     if (verify > 0)
         fprintf(f, "Judged on the mean of %ld fresh evaluations of each returned point, not on\n"
                    "the smallest value seen, which on a noisy objective is the luckiest draw the\n"
@@ -510,6 +542,10 @@ done:
     free(sc);
     free(v);
     free(inf);
+    free(pv);
+    free(adj);
+    free(wn);
+    free(nn);
     return rc;
 }
 

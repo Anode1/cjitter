@@ -48,14 +48,31 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
  * connectors of a few hundred units each, so length carries 81 to 90 percent of what varies
  * and picks the answer. The tiering is still right; the inference from it was not. */
 #define W_TIER      100.0   /* penetration and crossings, against length at 1 */
+#ifndef NODE_GAP
 #define NODE_GAP    12.0    /* clearance kept between table borders, in canvas units */
+#endif
 #define PUSH_SWEEPS 24      /* whole-layout push-out sweeps before the repair gives up */
 #define SEAT_STEP   24.0    /* grid step of the nearest-free-seat fallback */
 #define SEAT_RINGS  48      /* how far out that fallback will look */
+/* Overridable from the compiler line. They are guarded because they are not private: a
+ * harness that #includes this file to reuse the objective will define its own, and an
+ * unguarded #define here silently wins over -D. That cost a 101-seed sweep which ran at 5
+ * and reported it as 101. */
+#ifndef COUNT_ADJACENT_CROSSINGS
+#define COUNT_ADJACENT_CROSSINGS 0
+#endif
+#ifndef EVALS
 #define EVALS       8000
+#endif
+#ifndef SEEDS
 #define SEEDS       5
+#endif
+#ifndef JITTER
 #define JITTER      0.25    /* first move size, as a fraction of the canvas */
+#endif
+#ifndef POP
 #define POP         30
+#endif
 
 /* sqrt is correctly rounded by IEEE requirement and hypot is not; cjitter.h states the
  * discipline this length obeys. */
@@ -225,8 +242,18 @@ static long cand_cross(const Erd *g, const Route *rt, const Route *cand, long a,
     long b, k = 0;
     for (b = 0; b < g->ne; b++) {
         if (!routed_before(g, b, a, mode)) continue;
+        /* Two edges that share a table are not priced against each other. The convention
+         * comes from crossing-number theory, where an optimal drawing can be assumed to have
+         * no crossings between adjacent edges, so excluding them costs nothing. That argument
+         * does not carry to routed connectors leaving fixed attachment slots, where two edges
+         * out of the same table genuinely cross far away from it and a reader sees it. On the
+         * migration instances the exclusion discards 33 to 78 percent of the crossings present
+         * in the drawing. Build with -DCOUNT_ADJACENT_CROSSINGS=1 to price them; the default
+         * is 0 because every number pinned by the suite was measured under it. */
+#if !COUNT_ADJACENT_CROSSINGS
         if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
             g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
+#endif
         k += routes_cross(cand, &rt[b]);
     }
     return k;

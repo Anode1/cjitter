@@ -32,16 +32,19 @@ Most optimisation libraries will spend a million evaluations and never mention t
 sampling would have done as well. `cjitter_compare` runs all four methods at the same budget
 on the same seeds and reports, per method, the median, the range, the per-seed wins against
 the control, and the exact one-sided sign-test probability of that many wins under a fair
-coin. "better" is declared only when that probability is at or under 5%; "not shown" is a
-failure to demonstrate improvement, and says nothing about equality.
+coin. "better" is declared only when that probability is at or under 5% after Holm correction
+across the methods compared, since testing three of them against one control at 5% each
+would otherwise call one of three null methods better about 14% of the time; the raw sign-p
+is printed beside the corrected one. "not shown" is a failure to demonstrate improvement, and
+says nothing about equality.
 
 On the label problem, at 36% area coverage:
 
-    method         median        range    wins    sign-p   vs random
-    random        189.166      35.3242       -         - the control
-    climb         12.8278       39.717    7/7    0.00781      better
-    anneal        127.625      35.4232    7/7    0.00781      better
-    ga            1.38243      3.55264    7/7    0.00781      better
+    method         median        range    wins    sign-p      holm   vs random
+    random        189.166      35.3242       -         -         - the control
+    climb         12.8278       39.717    7/7    0.00781    0.0234      better
+    anneal        127.625      35.4232    7/7    0.00781    0.0234      better
+    ga            1.38243      3.55264    7/7    0.00781    0.0234      better
 
 The control has already earned its keep once. The first GA shipped here mutated at a fixed
 scale, and the table read "no better than uniform sampling at equal cost"; an outside review

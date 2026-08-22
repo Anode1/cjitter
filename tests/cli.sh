@@ -46,6 +46,10 @@ check "every verdict is one the interface defines" \
       "$(printf '%s' "$out" | grep -cE '^(climb|anneal|ga) .*(better|not shown)$')" "3"
 check "labels explains what better means" \
       "$(printf '%s' "$out" | grep -c 'exact one-sided sign')" "1"
+check "labels says the verdict is corrected for the number of methods" \
+      "$(printf '%s' "$out" | grep -c 'after correcting for the number of methods')" "1"
+check "compare prints the corrected column beside the raw one" \
+      "$(printf '%s' "$out" | grep -cE '^method .*sign-p +holm')" "1"
 
 # The refusals. Each of these is a message and an exit 2, not a run over a junk value: atol
 # reads "ninety" as 0, and 0 labels must refuse, not place nothing and report success.
