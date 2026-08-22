@@ -66,10 +66,10 @@ score means only as much as its calibration line, and the run prints both:
                20 crossings, 1943.96 penetration under this edge model
 
     method         median        range    wins    sign-p      holm   vs random
-    random         235567      39777.5       -         -         - the control
-    climb         90661.2        57623    5/5     0.0312    0.0938   not shown
-    anneal         127730      72009.9    5/5     0.0312    0.0938   not shown
-    ga            72070.3        14062    5/5     0.0312    0.0938   not shown
+    random         219319      52420.9       -         -         - the control
+    climb         90661.2        57623   15/15  3.05e-05  9.16e-05      better
+    anneal         104482       104166   15/15  3.05e-05  9.16e-05      better
+    ga            72766.2        23707   15/15  3.05e-05  9.16e-05      better
 
     ---- orthogonal routed connectors ----
 
@@ -78,30 +78,29 @@ score means only as much as its calibration line, and the run prints both:
                27 crossings, 323 penetration under this edge model
 
     method         median        range    wins    sign-p      holm   vs random
-    random        80747.1      31356.4       -         -         - the control
-    climb         46317.4      4584.05    5/5     0.0312    0.0938   not shown
-    anneal        47725.2      5057.59    5/5     0.0312    0.0938   not shown
-    ga            38565.5         6006    5/5     0.0312    0.0938   not shown
+    random        80606.3      36375.2       -         -         - the control
+    climb         46852.5        23507   15/15  3.05e-05  9.16e-05      better
+    anneal        46636.9      27853.7   15/15  3.05e-05  9.16e-05      better
+    ga            39560.8      7831.97   15/15  3.05e-05  9.16e-05      better
 
-Every verdict here reads "not shown", and that is the correction working rather than
-the methods failing. Five seeds put the exact one-sided sign test's floor at 0.0312, and
-three methods are tested against the one control, so the smallest Holm-corrected value a
-five-seed panel can produce is 3 x 0.0312 = 0.0938. Five seeds cannot support three
-simultaneous claims at 5%, whatever the data. The medians and ranges still say which method
-is ahead; what the panel cannot do is certify it. The labels example, at seven seeds, clears
-the line.
+This example runs fifteen seeds, not five. Three methods are tested against the one
+control, so the verdict column is Holm-corrected, and the smallest corrected value a
+five-seed panel can reach is 3 x 0.0312 = 0.0938: five seeds cannot certify anything here
+whatever the data. Fifteen puts the floor at 9.16e-05 and the verdicts stand. The panel, not
+the method, was the binding constraint, which is worth knowing before reading any table of
+this shape.
 
 Those are the default tuning's numbers, one proposal moving all twenty variables. `./erd
 --block 2` moves one table per proposal instead and reports, under the routed model:
 
     method         median        range    wins    sign-p      holm   vs random
-    random        80747.1      31356.4       -         -         - the control
-    climb         32572.2      1791.87    5/5     0.0312    0.0938   not shown
-    anneal        32916.8      2128.04    5/5     0.0312    0.0938   not shown
-    ga            53003.4      18528.4    5/5     0.0312    0.0938   not shown
+    random        80606.3      36375.2       -         -         - the control
+    climb         32572.2      1798.55   15/15  3.05e-05  9.16e-05      better
+    anneal        32972.3      2291.49   15/15  3.05e-05  9.16e-05      better
+    ga            40382.3      20409.3   15/15  3.05e-05  9.16e-05      better
 
 Read the range column beside the medians. Climb's median falls 30 percent and its spread over
-five seeds falls from 4584 to 1792, so the blocked search returns much the same layout
+the fifteen seeds falls from 23507 to 1799, so the blocked search returns much the same layout
 whichever seed it is given, which in a tool run once is worth as much as the median. The
 genetic algorithm is the exception and it is not a bug: only its mutation is blocked while
 crossover still blends every coordinate, so a narrow block leaves it a weak-mutation GA. On

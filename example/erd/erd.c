@@ -65,7 +65,10 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
 #define EVALS       8000
 #endif
 #ifndef SEEDS
-#define SEEDS       5
+#define SEEDS       15      /* not 5: three methods against one control means the smallest
+                             * Holm-corrected value a five-seed panel can reach is
+                             * 3 x 0.0312 = 0.0938, so five seeds cannot certify anything
+                             * here whatever the data. Fifteen can. */
 #endif
 #ifndef JITTER
 #define JITTER      0.25    /* first move size, as a fraction of the canvas */

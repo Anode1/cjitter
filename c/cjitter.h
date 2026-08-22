@@ -33,9 +33,9 @@
 
 /* The library's version, bumped only when the interface or a method's trajectory changes:
  * either one changes what a seed reproduces. */
-#define CJITTER_VERSION "0.11.0"
+#define CJITTER_VERSION "0.12.0"
 #define CJITTER_VERSION_MAJOR 0
-#define CJITTER_VERSION_MINOR 11
+#define CJITTER_VERSION_MINOR 12
 #define CJITTER_VERSION_PATCH 0
 
 /* Lower is better. CTX is yours, untouched. */
@@ -189,6 +189,21 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
  * top of this file to STREAM (a FILE*; NULL means stdout). Returns 0, or -1 on a bad
  * argument or an allocation failure, before anything is printed. SEEDS is at most 1000:
  * past that the exact tests' arithmetic stops being exact. */
+/* What compare answers, and what it does not.
+ *
+ * It answers one question per method: did this beat uniform sampling at the same budget, on
+ * the same seeds. It does not compare two non-control methods against each other. That is a
+ * different question with a different family of tests, and putting it here would quietly
+ * widen the correction the verdict column applies. Run your own panel for it.
+ *
+ * The test is the exact one-sided sign test, not the Wilcoxon signed-rank test that is the
+ * usual default for paired algorithm comparisons. Wilcoxon is more powerful when the paired
+ * differences are commensurable, and on one instance across seeds they are, so the choice
+ * costs power. It is deliberate: the sign test needs nothing of the differences but their
+ * sign, so a verdict here cannot be an artifact of a few large-magnitude seeds, and this
+ * library's whole point is that its verdicts be hard to talk yourself into. Report Wilcoxon
+ * beside it if you want the power; the per-seed values are yours.
+ */
 int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, FILE *stream);
 int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
                           const cjitter_tuning *t, long seeds, FILE *stream);
