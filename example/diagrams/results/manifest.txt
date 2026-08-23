@@ -1,0 +1,47 @@
+Run manifest, battery of 2026-08-23 (run_all.sh started 09:31 EDT, done by 12:00;
+tests.sh, lanes.py and sparsity.py the same day).
+
+repository        github.com/Anode1/cjitter, branch holm-and-macro-guards
+commit            1987633 (the machinery of the run; the analysis scripts added after join
+                  the next commit, no measurement code changed between them)
+platform          Ubuntu 24.04.4 LTS, Linux 6.8.0-104-generic, x86_64
+compiler          gcc 13.3.0, -O2
+python            3.12.3; fit venv: scipy 1.18.1 (HiGHS via linprog method 'highs'), numpy 2.5.2
+graphviz          2.43.0 (neato, prism = neato -Goverlap=false, dot)
+elk               ELK layered 0.12.0 through elkjs under node 22 (data/elk_layout.py,
+                  direction RIGHT, all else default)
+
+commands          results/run_all.sh (profiles, fit, descent), results/tests.sh (paired
+                  tests), results/lanes.py, results/sparsity.py; exact arguments inside.
+seeds             directional test none (deterministic); descent seeds 1..15, converged
+                  reference seed 1, --converge 60000; bootstrap seed 1, 1000 resamples;
+                  fit 5x2 CV seeds inside fit.py.
+diagrams          hs 305, sbgn 248, bpmn 300 (band 15..40 nodes)
+
+corpus archives (sha256)
+7c40fe0c13f78943f1600f09203c30d83c41fd6c71b81902367bf057a73f947a  bpmai.tar.gz
+4745cfce27b80fe4843d06bf7b2b88fd1e35c62ff241074afd4b71f619db2acd  rsbgn.tar.gz
+78ebee9adc391c60a326f4f8650be21b620fd5907911c06ba40387209307fa87  wikipathways-20260810-gpml-Homo_sapiens.zip
+
+corpora as measured (sha256, example/diagrams/data/)
+4acbf205c90b593feb26d028bfee5697ca0cf4198c085dde149e55050a63b990  hs.txt
+9569ef419761fb4857754ab6c0e8a66592ff3260044cadf0f8f934a9a34977a6  sbgn.txt
+2a6fc79f549767375224100c642a6e8c34c7597503b6e79b343d82fb808b8aea  bpmn.txt
+9ab975414be8ba3da8dc87ce166084fb807b2d385d33083aee766baae1229a89  hs_neato.txt
+d5ba989d7efb18bdd3083d4c27b2cad86b1259f2c87b80ea29e76ab8fd7f7a7a  hs_prism.txt
+f5d0d09e7924f620e6dfa2d40d9796213126167de1b88f5892618b5edd14caac  hs_dot.txt
+47f7e79daf47751af7ddd12abc6febba0014c884fcd285764ef630e5d7bcc950  hs_elk.txt
+76d2ab2585871dc0e9b63ed2e3f4b6116776ba18e3478d8fdffda4eeeb0ef973  sbgn_neato.txt
+a9d96216a375b690477b560ff57eba58078594cf4eb158b3bd59df2ed28f77eb  sbgn_prism.txt
+54bf5d9ddb873b7845359a40966dc098e7b0f92d250a9f5641e14607d2a26c33  sbgn_dot.txt
+5e1bf1134ea7d4e1a8b3c377461d51a8325db33aa01d0800860c2a26225f3879  sbgn_elk.txt
+9d68def3f33896a2233343b99ea66b61497577fe04505ae9205daa0fc6976b62  bpmn_neato.txt
+0fdc16157054d074400c957681fa7a0b7ab22ec8cae43c853d4fc0eb3013acf9  bpmn_prism.txt
+5b36e2d1db2e367af178c0e9a89334efa23b1328e8fb1d3ad5ceff3c01bbb698  bpmn_dot.txt
+fe6be5e0fd9d405f659337f928fef6725b35b8aac1d1f45f0f884d6e090dd01e  bpmn_elk.txt
+e43fe25eec6e10a71cec10d6fa0ab7d18fe8a8f0315d8e081936b953bebe9215  hs_chords.txt
+bf854795698d76052de9e22016117c2ff9214bc53c4d59ce09554cb70c97c33a  sbgn_chords.txt
+23048fa8f982302743330976d2784fcd6f0ef0d76f937f61ffd90bc6eb979adc  bpmn_chords.txt
+
+outputs           full.md, tex.txt, chords.md, sweep.md, median.md, cells/*.csv,
+                  fit/report.txt, desc/*.csv, tests/*.md, bpmn_hand_A1_nodes.csv

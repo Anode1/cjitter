@@ -50,8 +50,8 @@ pilot's node rules turned into degree-2 nodes.
 | corpus | source | graphs | median edges per box |
 | --- | --- | --- | --- |
 | WikiPathways | GPML, Homo sapiens, CC0, drawn in PathVisio | 305 | 1.06 |
-| Reactome | SBGN-ML, curated by hand | 248 | 0.96 |
-| BPMN | Academic Initiative, students in Signavio, BPMN models only | 300 | pending |
+| Reactome | SBGN-ML, curated by hand | 248 | 1.04 |
+| BPMN | Academic Initiative, students in Signavio, BPMN models only | 300 | 1.11 |
 
 ## The terms
 
@@ -72,45 +72,50 @@ to the node is manufactured. Directed: 91%, 100%, 95%.
 
 ## The profile
 
-Median q over graphs at d = 0.02, 16 directions, fitted L. Hand layouts, then the three tools'
+Median q over graphs at d = 0.02, 16 directions, fitted L. Hand layouts, then the four tools'
 layouts of the same graphs. In brackets, for a single term, the median value of that term at
 the layout. `make profile` prints the same table with a 95% bootstrap interval on every median
-(1000 resamples of graphs); the widest on a hand cell spans 0.15.
+(1000 resamples of graphs); the widest on a hand cell spans 0.10.
 
-| energy | WikiPathways hand | Reactome hand | BPMN hand | WikiPathways neato | Reactome neato | BPMN neato | WikiPathways prism | Reactome prism | BPMN prism | WikiPathways dot | Reactome dot | BPMN dot |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| crossings alone | 1.00 (0.038) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.118) | 1.00 (0.120) | 1.00 (0.065) |
-| overlap alone | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.60 (0.030) | 0.76 (0.022) | 0.39 (0.082) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
-| length alone | 0.00 (0.219) | 0.00 (0.234) | 0.00 (0.244) | 0.24 (0.011) | 0.35 (0.005) | 0.39 (0.005) | 0.19 (0.014) | 0.26 (0.009) | 0.27 (0.010) | 0.00 (0.301) | 0.00 (0.301) | 0.00 (0.150) |
-| stress alone | 0.00 (0.217) | 0.00 (0.212) | 0.00 (0.189) | 1.00 (0.042) | 1.00 (0.034) | 1.00 (0.017) | 0.94 (0.044) | 0.85 (0.042) | 0.86 (0.023) | 0.00 (0.239) | 0.00 (0.239) | 0.00 (0.188) |
-| orthogonality alone | 0.16 (0.193) | 0.05 (0.225) | 0.41 (0.140) | 0.00 (0.280) | 0.00 (0.277) | 0.00 (0.286) | 0.00 (0.281) | 0.00 (0.277) | 0.00 (0.286) | 0.14 (0.251) | 0.13 (0.262) | 0.14 (0.225) |
-| alignment A1 alone | 0.52 (0.003) | 0.21 (0.004) | 0.82 (0.001) | 0.06 (0.011) | 0.06 (0.009) | 0.07 (0.011) | 0.07 (0.010) | 0.06 (0.010) | 0.07 (0.011) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
-| alignment A3 alone | 0.20 (0.284) | 0.10 (0.300) | 0.27 (0.214) | 0.03 (0.446) | 0.03 (0.430) | 0.00 (0.452) | 0.03 (0.451) | 0.03 (0.428) | 0.00 (0.450) | 0.40 (0.159) | 0.35 (0.142) | 0.38 (0.188) |
-| gridiness alone | 0.87 (0.424) | 0.65 (0.640) | 0.90 (0.231) | 0.78 (1.000) | 0.77 (1.000) | 0.78 (1.000) | 0.79 (1.000) | 0.75 (1.000) | 0.79 (1.000) | 1.00 (0.059) | 1.00 (0.062) | 1.00 (0.111) |
-| node-edge alone | 0.76 (0.022) | 0.85 (0.006) | 0.86 (0.006) | 0.89 (0.000) | 0.93 (0.000) | 0.91 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.62 (0.029) | 0.65 (0.023) | 0.81 (0.006) |
-| C+O | 1.00 | 1.00 | 1.00 | 0.60 | 0.76 | 0.39 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
-| C+O+L | 0.00 | 0.00 | 0.00 | 0.17 | 0.33 | 0.23 | 0.19 | 0.27 | 0.27 | 0.00 | 0.00 | 0.00 |
-| C+O+S | 0.00 | 0.00 | 0.00 | 0.60 | 0.76 | 0.43 | 0.94 | 0.89 | 0.91 | 0.00 | 0.00 | 0.00 |
-| C+O+R | 0.17 | 0.06 | 0.41 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.15 | 0.14 | 0.14 |
-| C+O+A1 | 0.50 | 0.22 | 0.75 | 0.04 | 0.05 | 0.05 | 0.07 | 0.07 | 0.09 | 0.94 | 0.93 | 1.00 |
-| C+O+A3 | 0.25 | 0.11 | 0.33 | 0.03 | 0.03 | 0.03 | 0.03 | 0.03 | 0.03 | 0.53 | 0.58 | 0.50 |
-| C+O+grid | 0.84 | 0.64 | 0.83 | 0.45 | 0.52 | 0.30 | 0.79 | 0.75 | 0.79 | 0.97 | 0.97 | 0.94 |
-| C+O+N | 0.76 | 0.84 | 0.81 | 0.55 | 0.71 | 0.38 | 1.00 | 1.00 | 1.00 | 0.64 | 0.65 | 0.82 |
+| energy | WikiPathways hand | Reactome hand | BPMN hand | WikiPathways neato | Reactome neato | BPMN neato | WikiPathways prism | Reactome prism | BPMN prism | WikiPathways dot | Reactome dot | BPMN dot | WikiPathways elk | Reactome elk | BPMN elk |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| crossings alone | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.029) | 1.00 (0.056) | 1.00 (0.000) | 1.00 (0.036) | 1.00 (0.066) | 1.00 (0.000) |
+| overlap alone | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.60 (0.030) | 0.76 (0.022) | 0.41 (0.073) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
+| length alone | 0.00 (0.219) | 0.00 (0.234) | 0.00 (0.291) | 0.24 (0.011) | 0.35 (0.005) | 0.42 (0.006) | 0.19 (0.014) | 0.26 (0.009) | 0.27 (0.014) | 0.00 (0.241) | 0.00 (0.232) | 0.00 (0.250) | 0.00 (0.127) | 0.00 (0.205) | 0.00 (0.273) |
+| stress alone | 0.00 (0.217) | 0.00 (0.212) | 0.00 (0.203) | 1.00 (0.042) | 1.00 (0.034) | 1.00 (0.017) | 0.94 (0.044) | 0.85 (0.042) | 0.90 (0.024) | 0.00 (0.201) | 0.00 (0.177) | 0.00 (0.169) | 0.00 (0.241) | 0.00 (0.197) | 0.00 (0.190) |
+| orthogonality alone | 0.19 (0.157) | 0.17 (0.193) | 0.73 (0.011) | 0.00 (0.280) | 0.00 (0.277) | 0.00 (0.280) | 0.00 (0.281) | 0.00 (0.277) | 0.00 (0.278) | 0.19 (0.244) | 0.15 (0.256) | 0.26 (0.167) | 0.19 (0.158) | 0.12 (0.203) | 0.25 (0.139) |
+| alignment A1 alone | 0.52 (0.003) | 0.21 (0.004) | 0.91 (0.000) | 0.06 (0.011) | 0.06 (0.009) | 0.06 (0.011) | 0.07 (0.010) | 0.06 (0.010) | 0.06 (0.011) | 1.00 (0.000) | 1.00 (0.000) | 0.89 (0.000) | 0.57 (0.001) | 0.42 (0.002) | 0.62 (0.001) |
+| alignment A3 alone | 0.20 (0.284) | 0.10 (0.300) | 0.31 (0.207) | 0.03 (0.446) | 0.03 (0.430) | 0.00 (0.453) | 0.03 (0.451) | 0.03 (0.428) | 0.00 (0.452) | 0.45 (0.204) | 0.39 (0.206) | 0.19 (0.168) | 0.35 (0.176) | 0.31 (0.213) | 0.20 (0.155) |
+| gridiness alone | 0.87 (0.424) | 0.65 (0.640) | 0.95 (0.176) | 0.78 (1.000) | 0.77 (1.000) | 0.78 (1.000) | 0.79 (1.000) | 0.75 (1.000) | 0.78 (1.000) | 1.00 (0.125) | 0.95 (0.176) | 0.79 (0.219) | 0.76 (0.200) | 0.74 (0.306) | 0.69 (0.250) |
+| node-edge alone | 0.88 (0.004) | 1.00 (0.000) | 1.00 (0.000) | 0.89 (0.000) | 0.93 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.78 (0.011) | 0.80 (0.007) | 0.82 (0.003) | 0.74 (0.016) | 0.75 (0.021) | 0.76 (0.016) |
+| flow alone | 0.59 (0.131) | 0.62 (0.096) | 0.85 (0.045) | 0.50 (0.211) | 0.45 (0.217) | 0.62 (0.121) | 0.50 (0.211) | 0.44 (0.222) | 0.60 (0.123) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
+| C+O | 1.00 | 1.00 | 1.00 | 0.60 | 0.76 | 0.41 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| C+O+L | 0.00 | 0.00 | 0.00 | 0.17 | 0.33 | 0.24 | 0.19 | 0.27 | 0.29 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| C+O+S | 0.00 | 0.00 | 0.00 | 0.60 | 0.76 | 0.43 | 0.94 | 0.89 | 0.92 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| C+O+R | 0.21 | 0.17 | 0.73 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.19 | 0.14 | 0.28 | 0.22 | 0.13 | 0.40 |
+| C+O+A1 | 0.51 | 0.22 | 0.89 | 0.04 | 0.05 | 0.04 | 0.07 | 0.07 | 0.09 | 1.00 | 1.00 | 0.88 | 0.57 | 0.43 | 0.68 |
+| C+O+A3 | 0.24 | 0.11 | 0.33 | 0.03 | 0.03 | 0.03 | 0.03 | 0.03 | 0.03 | 0.50 | 0.42 | 0.33 | 0.41 | 0.33 | 0.45 |
+| C+O+grid | 0.84 | 0.64 | 0.95 | 0.45 | 0.52 | 0.28 | 0.79 | 0.75 | 0.78 | 0.96 | 0.94 | 0.75 | 0.74 | 0.73 | 0.67 |
+| C+O+N | 0.86 | 0.94 | 1.00 | 0.55 | 0.71 | 0.40 | 1.00 | 1.00 | 1.00 | 0.78 | 0.80 | 0.82 | 0.74 | 0.75 | 0.76 |
+| C+O+F | 0.56 | 0.61 | 0.84 | 0.30 | 0.33 | 0.26 | 0.50 | 0.44 | 0.61 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
 
 Read down the hand columns. Overlap holds every box and is satisfied (value 0): people never
 let boxes overlap, and neither does any tool that removes overlaps, so C+O separates a hand
 layout from neato's configuration and from nothing else. Crossings hold every box in every
-layout, because at radius 0.02 no single box can remove one; the value says WikiPathways
-authors leave about one crossing per 26 edges where neato leaves none and dot leaves three.
-Uniform edge length and stress hold no hand box: every box has a move that evens the
-distances, which is what neato did (stress 1.00) and what the person and dot did not (0.00).
-The three-term energy tools use, C+O+L, inherits the length term's verdict, which is what an
-earlier version of this study reported as "hand layouts are not stationary". Alignment with
-a corner (A1) holds half the WikiPathways boxes, a fifth of Reactome's and four in five BPMN
-boxes, against 0.06 for neato and 1.00 for dot, whose layers put every box in a row; by the
-gridiness value, 58%, 36% and 77% of hand-placed boxes are in an alignment of three or more,
-none of neato's, 94%, 94% and 89% of dot's. On every term but alignment the hand column
-reads as dot's column does.
+layout, because at radius 0.02 no single box can remove one; on the drawn routes the median
+hand diagram has no crossing in any corpus (on chords WikiPathways reads one per 26 edges),
+where dot and elk leave one per 15 to 35 edges on the biological corpora. Uniform edge
+length and stress hold no hand box: every box has a move that evens the distances, which is
+what neato did (stress 1.00) and what the person, dot and elk did not (0.00). The three-term
+energy tools use, C+O+L, inherits the length term's verdict, which is what an earlier
+version of this study reported as "hand layouts are not stationary". Alignment with a corner
+(A1) holds half the WikiPathways boxes, a fifth of Reactome's and nine in ten BPMN boxes,
+against 0.06 for neato, 0.89 to 1.00 for dot, whose layers put every box in a row, and 0.42
+to 0.62 for elk; by the gridiness value, 58%, 36% and 82% of hand-placed boxes are in an
+alignment of three or more, none of neato's, 88%, 82% and 78% of dot's. Flow is satisfied
+exactly by dot and elk (1.00 at value 0) and partly by the person (0.59, 0.62 and 0.85): a
+backward edge is something people tolerate and layered tools do not. On every term but
+alignment and flow the hand column reads as dot's column does.
 
 ## Files
 
@@ -128,7 +133,9 @@ reads as dot's column does.
     data/make_corpus.py  JSON to text corpora, the component taken here; --tool, --chords
     data/elk_layout.py   the ELK control, through elkjs under a local node
     data/*.txt           the corpora, their controls, their chord variants; fixture.txt
-    results/run_all.sh   every measurement the paper reads, into results/
+    results/run_all.sh   every measurement the paper reads, into results/; tests.sh the
+                         paired families, lanes.py the BPMN lane analysis, sparsity.py
+                         q against m/n, manifest.txt the versions, seeds and hashes
     pilot/               the exploratory run of 2026-08-21, superseded, defects declared
 
 `tests/diagrams.sh` (114 checks, under two seconds) pins the fixture's term values, worked

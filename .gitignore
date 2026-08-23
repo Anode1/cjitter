@@ -19,3 +19,4 @@ station
 station_asan
 station_ubsan
 .venv/
+__pycache__/
