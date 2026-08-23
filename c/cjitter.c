@@ -131,6 +131,20 @@ static void draw(Run *R, double *x)
     clamp(R->p, x);
 }
 
+/* Where a run begins: the caller's start point when there is one, a uniform draw otherwise.
+ * The start goes through the same box and repair as every proposal, so a start that satisfies
+ * both is scored bit for bit; drawing nothing from the rng is what keeps a NULL start the
+ * trajectory it always was. */
+static void first_point(Run *R, double *x)
+{
+    if (R->p->start) {
+        memcpy(x, R->p->start, (size_t)R->p->n * sizeof *x);
+        clamp(R->p, x);
+    } else {
+        draw(R, x);
+    }
+}
+
 /* Every evaluation goes through here, so the budget is exact and no method can quietly spend
  * more than another. The methods are responsible for not calling past the budget; the guard
  * turns a missed one into an immediate failure instead of a silently unfair comparison,
@@ -194,7 +208,7 @@ static void run_climb(Run *R, double jit, long *restarts)
 {
     long stuck = 0, patience = R->tun.climb_patience;
     double f, scale = jit;
-    draw(R, R->x);
+    first_point(R, R->x);
     f = score(R, R->x);
     keep(R, R->x, f);
     while (R->spent < R->budget) {
@@ -229,7 +243,7 @@ static void run_climb(Run *R, double jit, long *restarts)
 static void run_anneal(Run *R, double jit)
 {
     double f, t0 = 1.0, t;
-    draw(R, R->x);
+    first_point(R, R->x);
     f = score(R, R->x);
     keep(R, R->x, f);
     /* Scale the starting temperature to the problem: the mean uphill step of a few probes.
@@ -269,7 +283,9 @@ static void run_ga(Run *R, double jit)
     long i, j, np = R->npop, n = R->p->n;
     double *next = R->pop + np * n;
     for (i = 0; i < np && R->spent < R->budget; i++) {
-        draw(R, R->pop + i * n);
+        /* Member 0 carries the caller's start; the rest of the first population is drawn. */
+        if (i == 0) first_point(R, R->pop);
+        else        draw(R, R->pop + i * n);
         R->fit[i] = score(R, R->pop + i * n);
         keep(R, R->pop + i * n, R->fit[i]);
     }
@@ -406,11 +422,13 @@ static int cmpd(const void *a, const void *b)
 
 /* The chance of at least W wins in N tries of a fair coin: the exact one-sided sign test.
  * N is a seed count, so the binomial sum in doubles is exact to far more digits than the
- * three that get printed. */
-static double sign_p(long w, long n)
+ * three that get printed. Public since 0.13.0: a caller pooling instances needs the test the
+ * table used, not one they wrote again. */
+double cjitter_sign_p(long w, long n)
 {
     double c = 1.0, half = 1.0, sum = 0.0;
     long k;
+    if (n < 1) return 1.0;
     for (k = 0; k < n; k++) half *= 0.5;
     for (k = 0; k <= n; k++) {
         if (k >= w) sum += c * half;
@@ -419,22 +437,94 @@ static double sign_p(long w, long n)
     return sum < 1 ? sum : 1;
 }
 
-int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
-                          const cjitter_tuning *t, long seeds, FILE *stream)
+/* Holm's step-down correction over a declared family, monotone by construction: the smallest
+ * probability is multiplied by k, the next by k-1, and each result is raised to the one before
+ * it so the adjusted values never fall. ADJ carries the assignment order in its own negative
+ * entries, which is why it may not overlap P. */
+int cjitter_holm(const double *p, long k, double *adj)
+{
+    long i, r, done = 0;
+    double prev = 0.0;
+    if (!p || !adj || k < 1) return -1;
+    for (i = 0; i < k; i++) adj[i] = -1.0;
+    for (r = 0; r < k; r++) {
+        long besti = -1;
+        for (i = 0; i < k; i++)
+            if (adj[i] < 0 && (besti < 0 || p[i] < p[besti])) besti = i;
+        if (besti < 0) break;
+        {
+            double a = (double)(k - done) * p[besti];
+            if (a > 1.0) a = 1.0;
+            if (a < prev) a = prev;
+            adj[besti] = a; prev = a; done++;
+        }
+    }
+    return 0;
+}
+
+/* The mask, read once: 0 is all four, anything outside the four flags is a bad argument. */
+static int mask_ok(unsigned *methods)
+{
+    if (*methods == 0u) *methods = CJITTER_M_ALL;
+    return (*methods & ~(unsigned)CJITTER_M_ALL) == 0u;
+}
+
+int cjitter_compare_raw(const cjitter_problem *p, const cjitter_budget *b,
+                        const cjitter_tuning *t, long seeds, unsigned methods,
+                        double *score, double *x, double *inflation)
+{
+    cjitter_tuning eff;
+    uint32_t base;
+    long m, s, nm = 0, verify;
+
+    /* The cap is two guards in one: past it the size arithmetic in the callers can wrap, and
+     * past about a thousand the exact tests' doubles stop being exact. A thousand seeds is
+     * beyond any panel this comparison is for. */
+    if (!p || !b || !score || seeds < 1 || seeds > 1000 || p->n < 1) return -1;
+    if (!mask_ok(&methods)) return -1;
+    while (cjitter_methods[nm]) nm++;
+    eff = t ? *t : cjitter_tuning_default(p->n);
+    verify = eff.verify;
+
+    /* The same seed panel for every method, based on the caller's seed, so the per-seed
+     * differences are paired and a fresh panel is one seed away. */
+    base = b->seed ? b->seed : 1u;
+    for (m = 0; m < nm; m++) {
+        if (!(methods & (1u << (unsigned)m))) continue;
+        for (s = 0; s < seeds; s++) {
+            cjitter_budget bb = *b;
+            cjitter_result r;
+            memset(&r, 0, sizeof r);
+            if (x) r.x = x + (m * seeds + s) * p->n;
+            bb.seed = base + COMPARE_SEED_STEP * (uint32_t)s;
+            if (cjitter_run_tuned(cjitter_methods[m], p, &bb, t, &r) != 0) return -1;
+            /* Judge on what the search delivered when the caller paid to find that out. The
+             * smallest observation is the luckiest draw, and how much luck it carries differs
+             * by method, so a panel of them is not a fair comparison on a noisy objective. */
+            score[m * seeds + s] = verify > 0 ? r.verified : r.best;
+            if (inflation) inflation[m * seeds + s] = r.inflation;
+        }
+    }
+    return 0;
+}
+
+int cjitter_compare_masked(const cjitter_problem *p, const cjitter_budget *b,
+                           const cjitter_tuning *t, long seeds, unsigned methods,
+                           FILE *stream)
 {
     FILE *f = stream ? stream : stdout;
-    double *sc = NULL, *v = NULL, *inf = NULL, *pv = NULL, *adj = NULL;
+    double *sc = NULL, *v = NULL, *inf = NULL, *pv = NULL, *adj = NULL, *fp = NULL, *fa = NULL;
     long *wn = NULL, *nn = NULL;
     cjitter_tuning eff;
-    long verify;
-    uint32_t base;
-    long m, s, nm = 0;
+    long verify, nfam = 0;
+    long m, s, k, nm = 0;
     int rc = -1;
 
-    /* The cap is two guards in one: past it the size arithmetic below can wrap, and past
-     * about a thousand the exact tests' doubles stop being exact. A thousand seeds is
-     * beyond any panel this comparison is for. */
     if (!p || !b || seeds < 1 || seeds > 1000) return -1;
+    if (!mask_ok(&methods)) return -1;
+    /* Every verdict in this table is against the control, so a panel without it has nothing
+     * to report. */
+    if (!(methods & CJITTER_M_RANDOM)) return -1;
     eff = t ? *t : cjitter_tuning_default(p->n);
     verify = eff.verify;
     while (cjitter_methods[nm]) nm++;
@@ -443,57 +533,35 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
     inf = malloc((size_t)nm * (size_t)seeds * sizeof *inf);
     pv  = malloc((size_t)nm * sizeof *pv);
     adj = malloc((size_t)nm * sizeof *adj);
+    fp  = malloc((size_t)nm * sizeof *fp);
+    fa  = malloc((size_t)nm * sizeof *fa);
     wn  = malloc((size_t)nm * sizeof *wn);
     nn  = malloc((size_t)nm * sizeof *nn);
-    if (!sc || !v || !inf || !pv || !adj || !wn || !nn) goto done;
+    if (!sc || !v || !inf || !pv || !adj || !fp || !fa || !wn || !nn) goto done;
 
-    /* The same seed panel for every method, based on the caller's seed, so the per-seed
-     * differences below are paired and a fresh panel is one seed away. */
-    base = b->seed ? b->seed : 1u;
-    for (m = 0; m < nm; m++)
-        for (s = 0; s < seeds; s++) {
-            cjitter_budget bb = *b;
-            cjitter_result r;
-            memset(&r, 0, sizeof r);
-            bb.seed = base + COMPARE_SEED_STEP * (uint32_t)s;
-            if (cjitter_run_tuned(cjitter_methods[m], p, &bb, t, &r) != 0) goto done;
-            /* Judge on what the search delivered when the caller paid to find that out. The
-             * smallest observation is the luckiest draw, and how much luck it carries differs
-             * by method, so a panel of them is not a fair comparison on a noisy objective. */
-            sc[m * seeds + s] = verify > 0 ? r.verified : r.best;
-            inf[m * seeds + s] = r.inflation;
-        }
+    if (cjitter_compare_raw(p, b, t, seeds, methods, sc, NULL, inf) != 0) goto done;
 
-    /* Every non-control method is tested against the same control, so the three tests are
-     * one family: at 5% each the chance of calling at least one of three null methods better
-     * is 1 - 0.95^3, about 14%. The verdict column is therefore read off the Holm-adjusted
-     * value, and the raw sign-p is printed beside it so both are visible. */
+    /* Every non-control method is tested against the same control, so the tests are one
+     * family: at 5% each the chance of calling at least one of three null methods better is
+     * 1 - 0.95^3, about 14%. The verdict column is therefore read off the Holm-adjusted
+     * value, and the raw sign-p is printed beside it so both are visible. The family is what
+     * the mask selected, so a smaller panel carries a smaller correction. */
     for (m = 1; m < nm; m++) {
         long wins = 0, n = 0;
+        if (!(methods & (1u << (unsigned)m))) continue;
         for (s = 0; s < seeds; s++) {
             if (sc[m * seeds + s] == sc[s]) continue;
             n++;
             if (sc[m * seeds + s] < sc[s]) wins++;
         }
         wn[m] = wins; nn[m] = n;
-        pv[m] = n > 0 ? sign_p(wins, n) : 1.0;
+        pv[m] = n > 0 ? cjitter_sign_p(wins, n) : 1.0;
+        fp[nfam++] = pv[m];
     }
-    {   /* Holm step-down over the nm-1 comparisons, monotone by construction. */
-        long k, i, done_n = 0;
-        double prev = 0.0;
-        for (m = 1; m < nm; m++) adj[m] = -1.0;
-        for (k = 1; k < nm; k++) {
-            long besti = -1;
-            for (i = 1; i < nm; i++)
-                if (adj[i] < 0 && (besti < 0 || pv[i] < pv[besti])) besti = i;
-            if (besti < 0) break;
-            {
-                double a = (double)(nm - 1 - done_n) * pv[besti];
-                if (a > 1.0) a = 1.0;
-                if (a < prev) a = prev;
-                adj[besti] = a; prev = a; done_n++;
-            }
-        }
+    if (nfam > 0) {
+        if (cjitter_holm(fp, nfam, fa) != 0) goto done;
+        for (m = 1, k = 0; m < nm; m++)
+            if (methods & (1u << (unsigned)m)) adj[m] = fa[k++];
     }
 
     fprintf(f, "%-8s %12s %12s %7s %9s %9s %11s", "method",
@@ -503,6 +571,7 @@ int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
     fprintf(f, "\n");
     for (m = 0; m < nm; m++) {
         double med, range;
+        if (!(methods & (1u << (unsigned)m))) continue;
         memcpy(v, sc + m * seeds, (size_t)seeds * sizeof *v);
         qsort(v, (size_t)seeds, sizeof *v, cmpd);
         med = v[(seeds - 1) / 2];
@@ -544,9 +613,17 @@ done:
     free(inf);
     free(pv);
     free(adj);
+    free(fp);
+    free(fa);
     free(wn);
     free(nn);
     return rc;
+}
+
+int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
+                          const cjitter_tuning *t, long seeds, FILE *stream)
+{
+    return cjitter_compare_masked(p, b, t, seeds, CJITTER_M_ALL, stream);
 }
 
 int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, FILE *stream)

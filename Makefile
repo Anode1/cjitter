@@ -101,6 +101,7 @@ cjitter_ut: tests/tests.c $(SRC) $(HEADERS)
 cliut: examples
 	sh tests/cli.sh
 	sh tests/diagrams.sh
+	sh tests/analyse.sh
 
 # The sanitizers run both suites, because the examples' argument handling is only reachable
 # through the shell. -fno-sanitize-recover is what makes UBSan a gate rather than a report.

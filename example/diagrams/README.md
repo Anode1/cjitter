@@ -10,7 +10,7 @@ criterion that carries weight, and a tool started from it would find nothing to 
 directory tests that, one criterion at a time, on diagrams whose coordinates a person chose.
 
     make station
-    ./station direct --corpus example/diagrams/data/hs.txt --weights 1,1,0,0,0,0,0
+    ./station direct --corpus example/diagrams/data/hs.txt --weights 1,1,0,0,0,0,0,0
     make profile                 # the table below, about five minutes
 
 ## The test
@@ -37,23 +37,38 @@ and `--L rsqrt` (1 / sqrt n) are the sensitivities.
 
 Three communities, three authoring tools, every diagram's largest connected component of 15
 to 40 boxes (`data/make_corpus.py` takes the component and says why). Beside each, the same
-graphs with the same box sizes laid out by three graphviz tools, what a layout that does
+graphs with the same box sizes laid out by four tools, what a layout that does
 minimise something looks like under the same test: `neato` (stress, seeded so the file
 reproduces, boxes left where they overlap), `prism` (neato followed by its overlap removal,
-`-Goverlap=false`) and `dot` (layered). `station check` confirms a control is the same graphs.
+`-Goverlap=false`), `dot` (layered, edge directions kept) and ELK layered 0.12.0 (`elkjs`,
+direction RIGHT, `data/elk_layout.py`), the engine the BPMN editors run. `station check`
+confirms a control is the same graphs with the same edges, directions and box sizes. The BPMN
+corpus is the first 300 models by id whose every edge is a BPMN flow or association: the
+Academic Initiative archive is two fifths EPC, Petri net and UML models, whose flows the
+pilot's node rules turned into degree-2 nodes.
 
 | corpus | source | graphs | median edges per box |
 | --- | --- | --- | --- |
 | WikiPathways | GPML, Homo sapiens, CC0, drawn in PathVisio | 305 | 1.06 |
 | Reactome | SBGN-ML, curated by hand | 248 | 0.96 |
-| BPMN | Academic Initiative, students in Signavio | 147 | 1.03 |
+| BPMN | Academic Initiative, students in Signavio, BPMN models only | 300 | pending |
 
 ## The terms
 
 One function each in `energy.c`; `energy.h` gives the formulas. Crossings C, overlap O,
 edge-length uniformity L, stress S, orthogonality R, alignment A (four definitions: A1 a
 corner at exact alignment, A2 rows and columns separately, A3 a smooth kernel, grid HOLA's
-gridiness), node-edge separation N.
+gridiness), node-edge separation N, flow F (the backward component of directed edges along
+the reading direction, the axis direction under which the term is least for the layout).
+
+An edge is the route the file stores: the attachment point on the source box, the interior
+waypoints, the attachment point on the target box; C, R and N are evaluated on it, L and S
+on the centres. When a box moves its attachment points move with it and the waypoints stay.
+`data/*_chords.txt` are the same corpora as chords, the sensitivity. Of the edges in the
+band, 29% of WikiPathways', 7% of Reactome's and 33% of BPMN's carry an interior waypoint;
+GPML's Elbow and Curved connectors store endpoints only (15% and 3% of WikiPathways edges)
+and read as chords, and 22% end on an anchor of another interaction, where the last segment
+to the node is manufactured. Directed: 91%, 100%, 95%.
 
 ## The profile
 
@@ -100,17 +115,28 @@ reads as dot's column does.
 ## Files
 
     energy.h energy.c    the terms; + - * / fabs sqrt and a polynomial exp, nothing else
-    corpus.h corpus.c    the text format, the inclusion refusals, rescaling, L, distances
-    station.c            direct (the test, per graph or per box), terms (the values), check
-    profile.py           the table above; --ci intervals, --sweep the radius sweep, --tex
-    data/make_corpus.py  pilot JSON to text corpora, the component taken here; --tool controls
-    data/*.txt           the corpora and their controls; fixture.txt, four hand-computable layouts
+    corpus.h corpus.c    the text format (routes, directions), the refusals, rescaling, L, u
+    station.c            direct (the test; --diffs for the fit), terms, check, descend (the
+                         capped climber and the in-cap control through the library)
+    profile.py           the table above; --ci, --sweep, --tex, --save for analyse.py
+    fit.py               the weight fit: the LP on the simplex, 5x2 cross-validation, sweeps
+                         (needs scipy: python3 -m venv .venv && .venv/bin/pip install scipy)
+    analyse.py           paired Wilcoxon, sign test, Hodges-Lehmann, Holm; 630 self-checks
+    parsers/             GPML, SBGN-ML and Signavio JSON to JSON with routes and directions;
+                         check_against_pilot.py proves the node and edge sets unchanged
+    parsed/              the parsers' JSON for the diagrams in the band
+    data/make_corpus.py  JSON to text corpora, the component taken here; --tool, --chords
+    data/elk_layout.py   the ELK control, through elkjs under a local node
+    data/*.txt           the corpora, their controls, their chord variants; fixture.txt
+    results/run_all.sh   every measurement the paper reads, into results/
     pilot/               the exploratory run of 2026-08-21, superseded, defects declared
 
-`tests/diagrams.sh` (87 checks, under two seconds) pins the fixture's term values, worked
+`tests/diagrams.sh` (114 checks, under two seconds) pins the fixture's term values, worked
 out by hand under every reference length, the directional verdicts on them including the
 4-cycle that is a stress minimum at its fitted scale and at no other, order independence,
 every refusal, that every control is the same graphs as its corpus, the q of the first
 twenty graphs of each corpus under four energies, and that `energy.o` calls no
-transcendental libm. The descent through the library, the matched-budget control, and the
-weight fit are the next steps.
+transcendental libm; and the route fixture whose chords cross and whose drawn routes do
+not, the attachment point that moves with its box, the flow verdicts, and descend's
+reproducibility. The table above predates the routes, the flow term and the BPMN corpus
+rebuild; `results/run_all.sh` produces its successor.

@@ -97,6 +97,7 @@ int main(int argc, char **argv)
     }
     p.n = 2 * n; p.lo = lo; p.hi = hi;
     p.fitness = overlap; p.repair = inside; p.ctx = &L;
+    p.start = NULL;   /* every method from a uniform draw, as every pinned number here was */
     b.evals = evals; b.seed = 1;
 
     t = cjitter_tuning_default(p.n);

@@ -193,6 +193,7 @@ int main(void)
     p.fitness = sphere;
     p.repair = NULL;
     p.ctx = NULL;
+    p.start = NULL;
     if (landscape("sphere", &p))
         return 1;
 

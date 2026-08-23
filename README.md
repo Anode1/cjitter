@@ -6,11 +6,14 @@ You supply a fitness function over a box of real variables, lower being better, 
 evaluations, and, for hard constraints, a repair callback that moves a proposal into
 feasibility before it is scored. One call optimizes it:
 
-    cjitter_problem p = { n, lo, hi, my_fitness, my_repair, ctx };
+    cjitter_problem p = { n, lo, hi, my_fitness, my_repair, ctx, start };
     cjitter_budget  b = { 8000, 1 };           /* evaluations, seed */
     cjitter_result  r = { 0 };                 /* zero it; x is the one field you set */
     r.x = best;                                /* your array of n doubles */
     cjitter_run("climb", &p, &b, &r);
+
+`start` is the point climb and anneal score first and the ga carries as member 0, or NULL
+for the uniform draw every method used before it existed; random ignores it.
 
 No dependencies beyond libm. Deterministic from a seed, byte for byte, on every platform.
 `make lib` builds `libcjitter.a`; `make install` puts it and the one header under PREFIX.
@@ -37,6 +40,11 @@ across the methods compared, since testing three of them against one control at 
 would otherwise call one of three null methods better about 14% of the time; the raw sign-p
 is printed beside the corrected one. "not shown" is a failure to demonstrate improvement, and
 says nothing about equality.
+
+The same panel is available as numbers rather than a table. `cjitter_compare_raw` hands back
+the score and the returned point of every run, `cjitter_compare_masked` runs only the methods
+a mask names, and `cjitter_sign_p` and `cjitter_holm` are the two tests the verdict column is
+made of, so a study pooling many instances uses them rather than writing them again.
 
 On the label problem, at 36% area coverage:
 

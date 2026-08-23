@@ -41,3 +41,17 @@ E 0 1
 E 1 2
 E 2 3
 E 3 0
+# bend: the chords 0-1 and 2-3 cross at (0.5, 0.5); the drawn route of 0-1 leaves the centre
+# of 0, goes round the left through (-0.5, 0.5) and (-0.5, 1.6) and ends at the centre of 1,
+# so on the polylines nothing crosses. Orthogonality of the route is the length-weighted mean
+# of its three segments, 0.5, 0 and 0.6 / 2.1 over lengths 0.707107, 1.1 and 1.615549:
+# 0.238160; with the chord 2-3 at 0.5 and the vertical 1-2 at 0, R = 0.246053. No node is
+# within (w + h) / 4 = 0.05 of a foreign route.
+G bend 4 3
+V 0 0 0.1 0.1
+V 1 1 0.1 0.1
+V 1 0 0.1 0.1
+V 0 1 0.1 0.1
+U 0 1 0 0 -0.5 0.5 -0.5 1.6 1 1
+U 2 3
+U 1 2

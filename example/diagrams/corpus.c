@@ -14,7 +14,8 @@ static int fail(char *err, size_t len, const char *msg, const char *id, long lin
 
 static void graph_free(graph *g)
 {
-    free(g->x); free(g->w); free(g->h); free(g->ea); free(g->eb); free(g->dist);
+    free(g->x); free(g->w); free(g->h); free(g->ea); free(g->eb); free(g->dir);
+    free(g->wp); free(g->wpx); free(g->ofs); free(g->dist);
 }
 
 void corpus_free(graph *gs, long k)
@@ -60,6 +61,11 @@ static const char *finish(graph *g)
         g->w[i] /= s;
         g->h[i] /= s;
     }
+    for (i = 0; i < g->wp[g->m]; i++) {
+        g->wpx[2 * i] = (g->wpx[2 * i] - minx) / s;
+        g->wpx[2 * i + 1] = (g->wpx[2 * i + 1] - miny) / s;
+    }
+    for (i = 0; i < 4 * g->m; i++) g->ofs[i] /= s;
     len = malloc((size_t)g->m * sizeof *len);
     if (!len) return "out of memory";
     for (i = 0; i < g->m; i++) {
@@ -100,18 +106,99 @@ static const char *finish(graph *g)
             a += q; b += q * q;
         }
     g->L_stress = b / a;
+    {
+        static const double ux[4] = { 1, 0, -1, 0 }, uy[4] = { 0, 1, 0, -1 };
+        double best = 1e300;
+        for (i = 0; i < 4; i++) {
+            double f = flow_along(g, g->x, ux[i], uy[i]);
+            if (f < best) { best = f; g->ux = ux[i]; g->uy = uy[i]; }
+        }
+    }
+    return NULL;
+}
+
+/* Parses "E a b [x y ...]" or "U a b [x y ...]" into edge I of G: the first and last route
+ * points become offsets from the endpoints' centres, the rest are appended to wpx (grown as
+ * needed, *WCAP its capacity). Returns an error message or NULL. */
+static const char *read_edge(graph *g, long i, const char *buf, long *wcap)
+{
+    long a, b, k = 0, first;
+    char *end;
+    const char *p = buf + 1;
+    int directed = buf[0] == 'E';
+    double v[2];
+    a = strtol(p, &end, 10);
+    if (end == p) return "expected 'E a b' or 'U a b'";
+    p = end;
+    b = strtol(p, &end, 10);
+    if (end == p) return "expected 'E a b' or 'U a b'";
+    p = end;
+    if (a < 0 || b < 0 || a >= g->n || b >= g->n || a == b) return "bad edge endpoint";
+    g->ea[i] = a < b ? a : b;
+    g->eb[i] = a < b ? b : a;
+    g->dir[i] = !directed ? 0 : a < b ? 1 : -1;
+    g->wp[i + 1] = g->wp[i];
+    first = g->wp[i];
+    g->ofs[4 * i] = g->ofs[4 * i + 1] = g->ofs[4 * i + 2] = g->ofs[4 * i + 3] = 0;
+    for (;;) {
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == 0 || *p == '\n' || *p == '\r') break;
+        v[k % 2] = strtod(p, &end);
+        if (end == p) return "bad waypoint";
+        p = end;
+        if (k % 2 == 1) {
+            if (g->wp[i + 1] == *wcap) {
+                double *more;
+                *wcap = *wcap ? 2 * *wcap : 16;
+                more = realloc(g->wpx, (size_t)(2 * *wcap) * sizeof *more);
+                if (!more) return "out of memory";
+                g->wpx = more;
+            }
+            g->wpx[2 * g->wp[i + 1]] = v[0];
+            g->wpx[2 * g->wp[i + 1] + 1] = v[1];
+            g->wp[i + 1]++;
+        }
+        k++;
+    }
+    if (k % 2) return "odd number of route coordinates";
+    if (k == 2) return "a route needs two end points";
+    if (k >= 4) {
+        /* The first and last points attach to a and b: keep them as offsets, drop them from wpx. */
+        long last = g->wp[i + 1] - 1;
+        g->ofs[4 * i]     = g->wpx[2 * first] - g->x[2 * a];
+        g->ofs[4 * i + 1] = g->wpx[2 * first + 1] - g->x[2 * a + 1];
+        g->ofs[4 * i + 2] = g->wpx[2 * last] - g->x[2 * b];
+        g->ofs[4 * i + 3] = g->wpx[2 * last + 1] - g->x[2 * b + 1];
+        memmove(g->wpx + 2 * first, g->wpx + 2 * (first + 1), (size_t)(2 * (last - first - 1)) * sizeof *g->wpx);
+        g->wp[i + 1] -= 2;
+    }
+    /* Waypoints are stored from ea to eb; the file lists them from a to b. */
+    if (a > b) {
+        double t0 = g->ofs[4 * i], t1 = g->ofs[4 * i + 1];
+        g->ofs[4 * i] = g->ofs[4 * i + 2]; g->ofs[4 * i + 1] = g->ofs[4 * i + 3];
+        g->ofs[4 * i + 2] = t0; g->ofs[4 * i + 3] = t1;
+    }
+    if (a > b) {
+        long lo = g->wp[i], hi = g->wp[i + 1] - 1;
+        while (lo < hi) {
+            double tx = g->wpx[2 * lo], ty = g->wpx[2 * lo + 1];
+            g->wpx[2 * lo] = g->wpx[2 * hi]; g->wpx[2 * lo + 1] = g->wpx[2 * hi + 1];
+            g->wpx[2 * hi] = tx; g->wpx[2 * hi + 1] = ty;
+            lo++; hi--;
+        }
+    }
     return NULL;
 }
 
 long corpus_read(FILE *f, graph **out, char *err, size_t errlen)
 {
-    char buf[512], id[128] = "";
+    char buf[4096], id[128] = "";
     long line = 0, k = 0, cap = 0;
     graph *gs = NULL;
     err[0] = 0;
     while (next_line(f, buf, sizeof buf, &line)) {
         graph g;
-        long n, m, i;
+        long n, m, i, wcap = 0;
         const char *msg;
         if (sscanf(buf, "G %127s %ld %ld", id, &n, &m) != 3)
             { corpus_free(gs, k); return fail(err, errlen, "expected 'G id n m'", id, line); }
@@ -125,7 +212,11 @@ long corpus_read(FILE *f, graph **out, char *err, size_t errlen)
         g.h = malloc((size_t)n * sizeof *g.h);
         g.ea = malloc((size_t)m * sizeof *g.ea);
         g.eb = malloc((size_t)m * sizeof *g.eb);
-        if (!g.x || !g.w || !g.h || !g.ea || !g.eb)
+        g.dir = malloc((size_t)m * sizeof *g.dir);
+        g.wp = malloc((size_t)(m + 1) * sizeof *g.wp);
+        g.ofs = malloc((size_t)(4 * m) * sizeof *g.ofs);
+        if (g.wp) g.wp[0] = 0;
+        if (!g.x || !g.w || !g.h || !g.ea || !g.eb || !g.dir || !g.wp || !g.ofs)
             { graph_free(&g); corpus_free(gs, k); return fail(err, errlen, "out of memory", id, line); }
         for (i = 0; i < n; i++) {
             if (!next_line(f, buf, sizeof buf, &line) ||
@@ -135,13 +226,10 @@ long corpus_read(FILE *f, graph **out, char *err, size_t errlen)
                 { graph_free(&g); corpus_free(gs, k); return fail(err, errlen, "negative box size", id, line); }
         }
         for (i = 0; i < m; i++) {
-            long a, b;
-            if (!next_line(f, buf, sizeof buf, &line) || sscanf(buf, "E %ld %ld", &a, &b) != 2)
-                { graph_free(&g); corpus_free(gs, k); return fail(err, errlen, "expected 'E a b'", id, line); }
-            if (a < 0 || b < 0 || a >= n || b >= n || a == b)
-                { graph_free(&g); corpus_free(gs, k); return fail(err, errlen, "bad edge endpoint", id, line); }
-            g.ea[i] = a < b ? a : b;
-            g.eb[i] = a < b ? b : a;
+            if (!next_line(f, buf, sizeof buf, &line) || (buf[0] != 'E' && buf[0] != 'U') || buf[1] != ' ')
+                { graph_free(&g); corpus_free(gs, k); return fail(err, errlen, "expected 'E a b' or 'U a b'", id, line); }
+            if ((msg = read_edge(&g, i, buf, &wcap)) != NULL)
+                { graph_free(&g); corpus_free(gs, k); return fail(err, errlen, msg, id, line); }
         }
         if ((msg = finish(&g)) != NULL)
             { graph_free(&g); corpus_free(gs, k); return fail(err, errlen, msg, id, line); }

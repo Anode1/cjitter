@@ -745,6 +745,7 @@ int main(int argc, char **argv)
         lo[i+1] = 0; hi[i+1] = g.ch;
     }
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = score; p.repair = legal; p.ctx = &g;
+    p.start = NULL;   /* the search starts where it always did, at a uniform draw */
     b.evals = EVALS; b.seed = 1;
     t = cjitter_tuning_default(nv);
     t.jitter = JITTER; t.pop = POP;

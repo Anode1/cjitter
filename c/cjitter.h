@@ -33,9 +33,9 @@
 
 /* The library's version, bumped only when the interface or a method's trajectory changes:
  * either one changes what a seed reproduces. */
-#define CJITTER_VERSION "0.12.0"
+#define CJITTER_VERSION "0.13.0"
 #define CJITTER_VERSION_MAJOR 0
-#define CJITTER_VERSION_MINOR 12
+#define CJITTER_VERSION_MINOR 13
 #define CJITTER_VERSION_PATCH 0
 
 /* Lower is better. CTX is yours, untouched. */
@@ -54,6 +54,14 @@ typedef struct {
     cjitter_fitness  fitness;
     cjitter_repair   repair;   /* may be NULL */
     void            *ctx;
+    /* Added at the END in 0.13.0, so an existing positional initialiser still puts every
+     * value in the field it meant, and a struct filled field by field must now set it.
+     * NULL is what every earlier release did: each method starts from a uniform draw.
+     * Otherwise n values, the point climb and anneal score first and member 0 of the ga's
+     * first population. random ignores it, because a control handed the answer is not a
+     * control. It goes through the box and the repair like any other point: a start that
+     * satisfies both is scored bit for bit, one that does not is brought in first. */
+    const double    *start;
 } cjitter_problem;
 
 /* A budget is what a run may spend and where its randomness starts: the two things two runs
@@ -207,6 +215,55 @@ int cjitter_run_tuned(const char *method, const cjitter_problem *p, const cjitte
 int cjitter_compare(const cjitter_problem *p, const cjitter_budget *b, long seeds, FILE *stream);
 int cjitter_compare_tuned(const cjitter_problem *p, const cjitter_budget *b,
                           const cjitter_tuning *t, long seeds, FILE *stream);
+
+/* Which methods a comparison runs: one flag per entry of cjitter_methods, OR-ed together.
+ * 0 means all four, so the mask is off by default and the table is the one every earlier
+ * release printed. A panel costs a full budget per method per seed, and a caller asking only
+ * whether climb beats the control pays for anneal and the ga to answer a question they did
+ * not put. */
+#define CJITTER_M_RANDOM 1u
+#define CJITTER_M_CLIMB  2u
+#define CJITTER_M_ANNEAL 4u
+#define CJITTER_M_GA     8u
+#define CJITTER_M_ALL    15u
+
+/* cjitter_compare_tuned with a mask. METHODS must contain CJITTER_M_RANDOM: every verdict in
+ * the table is against the control, so a panel without it has nothing to report. The rows the
+ * mask leaves out are not run and not printed, and the Holm family is the non-control methods
+ * that remain, so a two-method panel is corrected over one comparison rather than three. */
+int cjitter_compare_masked(const cjitter_problem *p, const cjitter_budget *b,
+                           const cjitter_tuning *t, long seeds, unsigned methods,
+                           FILE *stream);
+
+/* The panel without the table: the numbers compare computes, handed to the caller. SCORE
+ * takes one value per run at SCORE[m * seeds + s], m indexing cjitter_methods so a row keeps
+ * its place whatever the mask, and the rows the mask leaves out are not written. The value is
+ * what compare judges on: the verified mean when tuning.verify > 0, the smallest observation
+ * otherwise. X, when not NULL, takes each run's returned point, n values at
+ * X + (m * seeds + s) * n; INFLATION, when not NULL, one value per run in SCORE's layout.
+ * METHODS is read as above but the control is not required, there being no verdict here.
+ * Returns 0, or -1 on a bad argument or an allocation failure.
+ *
+ * It exists because the quantity a study reports is often not the value compare prints but a
+ * function of the point returned, pooled over instances the library never sees. */
+int cjitter_compare_raw(const cjitter_problem *p, const cjitter_budget *b,
+                        const cjitter_tuning *t, long seeds, unsigned methods,
+                        double *score, double *x, double *inflation);
+
+/* The two statistics the verdict column is made of, public because a caller pooling several
+ * instances needs the same tests the table used.
+ *
+ * cjitter_sign_p is the exact one-sided sign test: the chance a fair coin gives at least WINS
+ * heads in N tries. N is a count, so the binomial sum in doubles is exact far past the digits
+ * compare prints. It returns 1 when N is 0 or WINS is 0 or fewer, and never more than 1.
+ *
+ * cjitter_holm applies Holm's step-down correction to the K probabilities in P and writes K
+ * values to ADJ, in P's order, each at most 1 and monotone in P by construction. ADJ must not
+ * overlap P. The correction is over a declared family: three methods tested against one
+ * control at 5% each calls one of three null methods better about 14% of the time. Returns 0,
+ * or -1 on a bad argument. */
+double cjitter_sign_p(long wins, long n);
+int    cjitter_holm(const double *p, long k, double *adj);
 
 /* The four names, NULL-terminated, in the order compare reports them. */
 extern const char *const cjitter_methods[];

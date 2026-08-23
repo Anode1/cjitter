@@ -15,39 +15,61 @@
  * needs no gradient, so it is defined for the crossing count and the overlap corners, and it
  * needs no seed, so it reproduces exactly.
  *
- *     station direct --corpus F --weights C,O,L,S,R,A,N [--d 0.02] [--dirs 16]
+ *     station direct --corpus F --weights C,O,L,S,R,A,N,F [--d 0.02] [--dirs 16]
  *                    [--align a1|a2|a3|grid] [--L fit|median|rsqrt] [--s 0.02] [--tol 0.005]
- *                    [--nodes]
+ *                    [--nodes | --diffs]
  *     station terms  --corpus F [--align ...] [--L ...] [--s ...] [--tol ...]
  *     station check  --corpus F --against G
+ *     station descend --corpus F --weights ... [--d 0.02] [--budget 4000] [--seeds 15]
+ *                    [--jitter 0.25] [--patience 200] [--converge 0] [--seed 1]
  *
  * direct prints one CSV row per graph: id, n, m, E (the energy at the layout), q, dec (the
- * mean over nodes of the best decrease found, over E; 0 when held), and the seven term
+ * mean over nodes of the best decrease found, over E; 0 when held), and the eight term
  * values at the layout. With --nodes it prints one row per node instead: id, node, the best
- * direction's index (-1 if held) and its decrease.
+ * direction's index (-1 if held) and its decrease. With --diffs it prints one row per node
+ * and direction: id, node, dir, and the change of each of the eight terms under that move,
+ * which is what the weight fit reads: node i is held under weights w exactly when
+ * sum_k w_k diff_k >= 0 in every direction.
  *
- * terms prints id, n, m, L (the length term's reference), Ls (the stress term's) and the
- * seven term values at the layout, which is how the tests pin the formulas and how the
- * paper's term-share line is made.
+ * terms prints id, n, m, L (the length term's reference), Ls (the stress term's), ux, uy
+ * (the flow term's reading direction) and the eight term values at the layout, which is how
+ * the tests pin the formulas and how the paper's term-share line is made.
  *
  * check reads two corpora and exits 0 when they are the same graphs in the same order with
- * the same raw box sizes, which is what a tool control must be, and 2 naming the first
- * difference otherwise. */
+ * the same edges, directions and raw box sizes, which is what a tool control must be, and 2
+ * naming the first difference otherwise. Waypoints are not compared: a control has none.
+ *
+ * descend is the secondary estimand, through the library. Per graph, hill climbing starts
+ * from the layout, one node per proposal (block 2), every node kept within the disc of radius
+ * d about where it started (the repair), first step jitter x 2d per coordinate, 200
+ * rejections before the step halves (--patience; at the default N of the library the
+ * uncapped climb below stops short, q 0.88 where 200 gives 1.00), for BUDGET evaluations
+ * and SEEDS seeds;
+ * uniform sampling in the same cap at the same budget on the same seeds is the control. Per
+ * graph it prints id, n, m, E, q, then the mean over seeds of the energy the climber ends at
+ * and the control's, the fraction of the cap used (mean over seeds and nodes of the distance
+ * moved over d), the fraction of energy removed, the number of seeds on which the climber
+ * ends lower than the control, and the exact sign p of that count. With --converge B an
+ * uncapped climb of B evaluations from the layout, one seed, adds the energy it ends at and
+ * q there: the converged reference, which must be near 1 for the test to have power. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "energy.h"
 #include "corpus.h"
+#include "cjitter.h"
 
 static void usage(void)
 {
     fprintf(stderr,
-        "usage: station direct --corpus FILE --weights C,O,L,S,R,A,N [--d 0.02] [--dirs 16]\n"
+        "usage: station direct --corpus FILE --weights C,O,L,S,R,A,N,F [--d 0.02] [--dirs 16]\n"
         "                      [--align a1|a2|a3|grid] [--L fit|median|rsqrt] [--s 0.02]\n"
-        "                      [--tol 0.005] [--nodes]\n"
+        "                      [--tol 0.005] [--nodes | --diffs]\n"
         "       station terms  --corpus FILE [--align ...] [--L ...] [--s ...] [--tol ...]\n"
-        "       station check  --corpus FILE --against FILE\n");
+        "       station check  --corpus FILE --against FILE\n"
+        "       station descend --corpus FILE --weights ... [--d 0.02] [--budget 4000] [--seeds 15]\n"
+        "                       [--jitter 0.25] [--patience 200] [--converge 0] [--seed 1]\n");
     exit(2);
 }
 
@@ -86,7 +108,7 @@ static void parse_weights(const char *v, double w[NTERMS])
         if (*end != ',') break;
         p = end + 1;
     }
-    fprintf(stderr, "station: --weights needs seven non-negative numbers C,O,L,S,R,A,N, not '%s'\n", v);
+    fprintf(stderr, "station: --weights needs eight non-negative numbers C,O,L,S,R,A,N,F, not '%s'\n", v);
     exit(2);
 }
 
@@ -139,8 +161,9 @@ static const char *differ(const graph *a, const graph *b)
     if (a->n != b->n || a->m != b->m)
         { snprintf(msg, sizeof msg, "%s: %ld nodes %ld edges against %ld and %ld", a->id, a->n, a->m, b->n, b->m); return msg; }
     for (i = 0; i < a->m; i++)
-        if (a->ea[i] != b->ea[i] || a->eb[i] != b->eb[i])
-            { snprintf(msg, sizeof msg, "%s: edge %ld is %ld-%ld against %ld-%ld", a->id, i, a->ea[i], a->eb[i], b->ea[i], b->eb[i]); return msg; }
+        if (a->ea[i] != b->ea[i] || a->eb[i] != b->eb[i] || a->dir[i] != b->dir[i])
+            { snprintf(msg, sizeof msg, "%s: edge %ld is %ld-%ld (%d) against %ld-%ld (%d)", a->id, i,
+                       a->ea[i], a->eb[i], a->dir[i], b->ea[i], b->eb[i], b->dir[i]); return msg; }
     for (i = 0; i < a->n; i++) {
         double aw = a->w[i] * a->scale, ah = a->h[i] * a->scale, bw = b->w[i] * b->scale, bh = b->h[i] * b->scale;
         if (fabs(aw - bw) > 1e-6 * (1 + fabs(aw)) || fabs(ah - bh) > 1e-6 * (1 + fabs(ah)))
@@ -149,23 +172,160 @@ static const char *differ(const graph *a, const graph *b)
     return NULL;
 }
 
+/* The directional test on layout X: the fraction of nodes held, and the mean best decrease
+ * over E(X) in *DEC. Y is scratch for 2n doubles. With DIFFS the per-move term changes are
+ * printed, with NODES the per-node verdicts. */
+static double direct_q(const graph *g, const double *x, const energy_spec *e, double d,
+                       long dirs, const double *dx, const double *dy, double *y,
+                       double *dec, int diffs, int nodes)
+{
+    double t[NTERMS], e0 = energy(g, x, e, t), sum = 0;
+    long held = 0, node, dir, i;
+    memcpy(y, x, (size_t)(2 * g->n) * sizeof *y);
+    for (node = 0; node < g->n; node++) {
+        double best = 1e-12 * e0;
+        long bdir = -1;
+        for (dir = 0; dir < dirs; dir++) {
+            double e1, t1[NTERMS];
+            y[2 * node] = x[2 * node] + d * dx[dir];
+            y[2 * node + 1] = x[2 * node + 1] + d * dy[dir];
+            e1 = energy(g, y, e, diffs ? t1 : NULL);
+            if (diffs) {
+                printf("%s,%ld,%ld", g->id, node, dir);
+                for (i = 0; i < NTERMS; i++) printf(",%.9g", t1[i] - t[i]);
+                printf("\n");
+            }
+            if (e0 - e1 > best) { best = e0 - e1; bdir = dir; }
+        }
+        y[2 * node] = x[2 * node];
+        y[2 * node + 1] = x[2 * node + 1];
+        if (bdir < 0) held++; else sum += best;
+        if (nodes) printf("%s,%ld,%ld,%.9f\n", g->id, node, bdir, bdir < 0 ? 0 : best);
+    }
+    *dec = e0 > 0 ? sum / (double)g->n / e0 : 0;
+    return (double)held / (double)g->n;
+}
+
+/* The climber's problem: the layout as 2n variables, the energy as fitness, the cap as a
+ * disc of radius d about the start, enforced by the repair. */
+typedef struct { const graph *g; const energy_spec *e; const double *x0; double d; } cap_ctx;
+
+static double cap_fitness(const double *x, void *ctx)
+{
+    const cap_ctx *c = ctx;
+    return energy(c->g, x, c->e, NULL);
+}
+
+static void cap_repair(double *x, void *ctx)
+{
+    const cap_ctx *c = ctx;
+    long i;
+    for (i = 0; i < c->g->n; i++) {
+        double ux = x[2 * i] - c->x0[2 * i], uy = x[2 * i + 1] - c->x0[2 * i + 1];
+        double r = sqrt(ux * ux + uy * uy);
+        if (r > c->d) { x[2 * i] = c->x0[2 * i] + ux * c->d / r; x[2 * i + 1] = c->x0[2 * i + 1] + uy * c->d / r; }
+    }
+}
+
+/* Mean over nodes of the distance from X0 to X, over d. */
+static double cap_used(const graph *g, const double *x0, const double *x, double d)
+{
+    long i;
+    double s = 0;
+    for (i = 0; i < g->n; i++) {
+        double ux = x[2 * i] - x0[2 * i], uy = x[2 * i + 1] - x0[2 * i + 1];
+        s += sqrt(ux * ux + uy * uy) / d;
+    }
+    return s / (double)g->n;
+}
+
+static int descend(const graph *gs, long k, const energy_spec *e, double d, long dirs,
+                   const double *dx, const double *dy, long budget, long seeds, double jitter,
+                   long patience, long converge, uint32_t seed)
+{
+    long gi, i, s;
+    printf("id,n,m,E,q,climb,random,cap_climb,cap_random,rho_climb,rho_random,wins,p");
+    if (converge) printf(",converged,q_converged");
+    printf("\n");
+    for (gi = 0; gi < k; gi++) {
+        const graph *g = &gs[gi];
+        long n2 = 2 * g->n;
+        double *lo = malloc((size_t)n2 * sizeof *lo), *hi = malloc((size_t)n2 * sizeof *hi);
+        double *y = malloc((size_t)n2 * sizeof *y);
+        double *score = malloc((size_t)(4 * seeds) * sizeof *score);
+        double *pts = malloc((size_t)(4 * seeds * n2) * sizeof *pts);
+        double e0, q, dec, ec = 0, er = 0, cc = 0, cr = 0;
+        long wins = 0;
+        cap_ctx ctx;
+        cjitter_problem p;
+        cjitter_budget b;
+        cjitter_tuning t = cjitter_tuning_default(n2);
+        if (!lo || !hi || !y || !score || !pts) { fprintf(stderr, "station: out of memory\n"); return 2; }
+        for (i = 0; i < n2; i++) { lo[i] = g->x[i] - d; hi[i] = g->x[i] + d; }
+        ctx.g = g; ctx.e = e; ctx.x0 = g->x; ctx.d = d;
+        memset(&p, 0, sizeof p);
+        p.n = n2; p.lo = lo; p.hi = hi; p.fitness = cap_fitness; p.repair = cap_repair;
+        p.ctx = &ctx; p.start = g->x;
+        b.evals = budget; b.seed = seed + (uint32_t)gi * 1000003u;
+        t.block = 2; t.jitter = jitter; t.climb_patience = patience;
+        t.climb_restart_at = 0; t.verify = 0;
+        if (cjitter_compare_raw(&p, &b, &t, seeds, CJITTER_M_CLIMB | CJITTER_M_RANDOM, score, pts, NULL))
+            { fprintf(stderr, "station: the library refused the problem\n"); return 2; }
+        e0 = energy(g, g->x, e, NULL);
+        q = direct_q(g, g->x, e, d, dirs, dx, dy, y, &dec, 0, 0);
+        for (s = 0; s < seeds; s++) {
+            /* cjitter_methods order: random 0, climb 1 */
+            double sr = score[0 * seeds + s], sc = score[1 * seeds + s];
+            er += sr; ec += sc;
+            cr += cap_used(g, g->x, pts + (0 * seeds + s) * n2, d);
+            cc += cap_used(g, g->x, pts + (1 * seeds + s) * n2, d);
+            if (sc < sr) wins++;
+        }
+        ec /= (double)seeds; er /= (double)seeds; cc /= (double)seeds; cr /= (double)seeds;
+        printf("%s,%ld,%ld,%.6f,%.6f,%.6f,%.6f,%.4f,%.4f,%.4f,%.4f,%ld,%.4g", g->id, g->n, g->m, e0, q,
+               ec, er, cc, cr, e0 > 0 ? (e0 - ec) / e0 : 0, e0 > 0 ? (e0 - er) / e0 : 0,
+               wins, cjitter_sign_p(wins, seeds));
+        if (converge) {
+            cjitter_result r = { 0 };
+            double qc, decc, *xc = malloc((size_t)n2 * sizeof *xc);
+            if (!xc) { fprintf(stderr, "station: out of memory\n"); return 2; }
+            for (i = 0; i < n2; i++) { lo[i] = -0.5; hi[i] = 1.5; }
+            p.repair = NULL;
+            b.evals = converge;
+            t.jitter = 0.02;
+            r.x = xc;
+            if (cjitter_run_tuned("climb", &p, &b, &t, &r))
+                { fprintf(stderr, "station: the library refused the problem\n"); return 2; }
+            qc = direct_q(g, xc, e, d, dirs, dx, dy, y, &decc, 0, 0);
+            printf(",%.6f,%.6f", r.best, qc);
+            free(xc);
+        }
+        printf("\n");
+        free(lo); free(hi); free(y); free(score); free(pts);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode, *corpus = NULL, *weights = NULL, *against = NULL;
     energy_spec e;
     double d = 0.02, *dx = NULL, *dy = NULL;
-    long dirs = 16, k, gi, nodes = 0, i;
+    long dirs = 16, k, gi, nodes = 0, diffs = 0, i, budget = 4000, seeds = 15, patience = 200, converge = 0;
+    double jitter = 0.25;
+    uint32_t seed = 1;
     int a, have_weights = 0;
     graph *gs;
 
     if (argc < 2) usage();
     mode = argv[1];
-    if (strcmp(mode, "direct") && strcmp(mode, "terms") && strcmp(mode, "check")) usage();
+    if (strcmp(mode, "direct") && strcmp(mode, "terms") && strcmp(mode, "check") && strcmp(mode, "descend")) usage();
     memset(&e, 0, sizeof e);
     e.align = ALIGN_A3; e.lref = L_FIT; e.s = 0.02; e.tol = 0.005;
     for (a = 2; a < argc; a++) {
         const char *o = argv[a], *v = a + 1 < argc ? argv[a + 1] : NULL;
         if (!strcmp(o, "--nodes")) { nodes = 1; continue; }
+        if (!strcmp(o, "--diffs")) { diffs = 1; continue; }
         if (!v) usage();
         if (!strcmp(o, "--corpus")) corpus = v;
         else if (!strcmp(o, "--against")) against = v;
@@ -174,6 +334,12 @@ int main(int argc, char **argv)
         else if (!strcmp(o, "--dirs")) dirs = arg_long("--dirs", v, 1, 3600);
         else if (!strcmp(o, "--s")) e.s = arg_double("--s", v, 1e-9, 1);
         else if (!strcmp(o, "--tol")) e.tol = arg_double("--tol", v, 0, 1);
+        else if (!strcmp(o, "--budget")) budget = arg_long("--budget", v, 1, 100000000L);
+        else if (!strcmp(o, "--seeds")) seeds = arg_long("--seeds", v, 1, 1000);
+        else if (!strcmp(o, "--jitter")) jitter = arg_double("--jitter", v, 0, 10);
+        else if (!strcmp(o, "--patience")) patience = arg_long("--patience", v, 1, 1000000);
+        else if (!strcmp(o, "--converge")) converge = arg_long("--converge", v, 0, 100000000L);
+        else if (!strcmp(o, "--seed")) seed = (uint32_t)arg_long("--seed", v, 0, 4294967295L);
         else if (!strcmp(o, "--align")) {
             if (!strcmp(v, "a1")) e.align = ALIGN_A1;
             else if (!strcmp(v, "a2")) e.align = ALIGN_A2;
@@ -191,8 +357,8 @@ int main(int argc, char **argv)
         a++;
     }
     if (!corpus) { fprintf(stderr, "station: --corpus is required\n"); return 2; }
-    if (!strcmp(mode, "direct")) {
-        if (!have_weights) { fprintf(stderr, "station: direct needs --weights\n"); return 2; }
+    if (!strcmp(mode, "direct") || !strcmp(mode, "descend")) {
+        if (!have_weights) { fprintf(stderr, "station: %s needs --weights\n", mode); return 2; }
         parse_weights(weights, e.w);
     }
     if (!strcmp(mode, "check") && !against) { fprintf(stderr, "station: check needs --against\n"); return 2; }
@@ -211,13 +377,13 @@ int main(int argc, char **argv)
     }
 
     if (!strcmp(mode, "terms")) {
-        printf("id,n,m,L,Ls");
+        printf("id,n,m,L,Ls,ux,uy");
         for (i = 0; i < NTERMS; i++) printf(",%s", term_name[i]);
         printf("\n");
         for (gi = 0; gi < k; gi++) {
             const graph *g = &gs[gi];
-            printf("%s,%ld,%ld,%.6f,%.6f", g->id, g->n, g->m,
-                   ref_length(TERM_L, g, &e), ref_length(TERM_S, g, &e));
+            printf("%s,%ld,%ld,%.6f,%.6f,%g,%g", g->id, g->n, g->m,
+                   ref_length(TERM_L, g, &e), ref_length(TERM_S, g, &e), g->ux, g->uy);
             for (i = 0; i < NTERMS; i++) printf(",%.6f", term_value((int)i, g, g->x, &e));
             printf("\n");
         }
@@ -230,7 +396,18 @@ int main(int argc, char **argv)
     if (!dx || !dy) { fprintf(stderr, "station: out of memory\n"); return 2; }
     for (i = 0; i < dirs; i++) direction(i, dirs, &dx[i], &dy[i]);
 
-    if (nodes) printf("id,node,best_dir,decrease\n");
+    if (!strcmp(mode, "descend")) {
+        int rc = descend(gs, k, &e, d, dirs, dx, dy, budget, seeds, jitter, patience, converge, seed);
+        free(dx); free(dy);
+        corpus_free(gs, k);
+        return rc;
+    }
+    if (diffs) {
+        printf("id,node,dir");
+        for (i = 0; i < NTERMS; i++) printf(",%s", term_name[i]);
+        printf("\n");
+    }
+    else if (nodes) printf("id,node,best_dir,decrease\n");
     else {
         printf("id,n,m,E,q,dec");
         for (i = 0; i < NTERMS; i++) printf(",%s", term_name[i]);
@@ -238,29 +415,12 @@ int main(int argc, char **argv)
     }
     for (gi = 0; gi < k; gi++) {
         const graph *g = &gs[gi];
-        double t[NTERMS], e0 = energy(g, g->x, &e, t), dec = 0;
+        double t[NTERMS], e0 = energy(g, g->x, &e, t), dec, q;
         double *y = malloc((size_t)(2 * g->n) * sizeof *y);
-        long held = 0, node;
         if (!y) { fprintf(stderr, "station: out of memory\n"); return 2; }
-        memcpy(y, g->x, (size_t)(2 * g->n) * sizeof *y);
-        for (node = 0; node < g->n; node++) {
-            double best = 1e-12 * e0;
-            long bdir = -1, dir;
-            for (dir = 0; dir < dirs; dir++) {
-                double e1;
-                y[2 * node] = g->x[2 * node] + d * dx[dir];
-                y[2 * node + 1] = g->x[2 * node + 1] + d * dy[dir];
-                e1 = energy(g, y, &e, NULL);
-                if (e0 - e1 > best) { best = e0 - e1; bdir = dir; }
-            }
-            y[2 * node] = g->x[2 * node];
-            y[2 * node + 1] = g->x[2 * node + 1];
-            if (bdir < 0) held++; else dec += best;
-            if (nodes) printf("%s,%ld,%ld,%.9f\n", g->id, node, bdir, bdir < 0 ? 0 : best);
-        }
-        if (!nodes) {
-            printf("%s,%ld,%ld,%.6f,%.6f,%.6f", g->id, g->n, g->m, e0,
-                   (double)held / (double)g->n, e0 > 0 ? dec / (double)g->n / e0 : 0);
+        q = direct_q(g, g->x, &e, d, dirs, dx, dy, y, &dec, (int)diffs, (int)nodes);
+        if (!nodes && !diffs) {
+            printf("%s,%ld,%ld,%.6f,%.6f,%.6f", g->id, g->n, g->m, e0, q, dec);
             for (i = 0; i < NTERMS; i++) printf(",%.6f", t[i]);
             printf("\n");
         }

@@ -115,6 +115,7 @@ int main(int argc, char **argv)
         lo[i+1] = 0; hi[i+1] = g.ch;
     }
     p.n = nv; p.lo = lo; p.hi = hi; p.fitness = traced; p.repair = legal; p.ctx = &g;
+    p.start = NULL;
     b.evals = EVALS; b.seed = 1;
     /* One table per proposal. The film exists to show the search working, and at the default
      * block every proposal displaces all ten tables at once, so the reader watches the whole

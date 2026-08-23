@@ -3,40 +3,43 @@ graph. Runs station's directional test over the corpora for the declared energie
 prints the median q per cell (1 = every node held, 0 = none).
 
     python3 profile.py [--d 0.02] [--dirs 16] [--L fit|median|rsqrt] [--layouts hand,neato,prism,dot]
-                       [--only NAME,NAME,...] [--ci] [--station ../../station] [--md | --tex]
+                       [--only NAME,NAME,...] [--ci] [--save DIR] [--station ../../station] [--md | --tex]
     python3 profile.py --sweep [--only ...]        the radius sweep, d in 0.005 0.01 0.02 0.05
 
 --tex prints the paper's layout instead: one block per corpus, a column per layout kind,
 the interval on the hand column only.
 
 --ci adds a 95% bootstrap interval to every median: 1000 resamples of graphs, seed 1, the
-2.5th and 97.5th percentile of the resampled medians.
+2.5th and 97.5th percentile of the resampled medians. --save DIR keeps every station CSV as
+DIR/<corpus stem>_<layout>_<energy>.csv, which analyse.py pairs for the tests.
 """
 import csv, io, os, random, statistics as st, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TERMS = ['crossings', 'overlap', 'length', 'stress', 'orthogonality', 'alignment', 'node-edge']
+TERMS = ['crossings', 'overlap', 'length', 'stress', 'orthogonality', 'alignment', 'node-edge', 'flow']
 CORPORA = [('WikiPathways', 'hs'), ('Reactome', 'sbgn'), ('BPMN', 'bpmn')]
-LAYOUTS = ['hand', 'neato', 'prism', 'dot']   # hand, then the tool controls; file stem suffixes
+LAYOUTS = ['hand', 'neato', 'prism', 'dot', 'elk']   # hand, then the tool controls; file stem suffixes
 # name, weights C,O,L,S,R,A,N, alignment definition
 ENERGIES = [
-    ('crossings alone',            '1,0,0,0,0,0,0', 'a1'),
-    ('overlap alone',              '0,1,0,0,0,0,0', 'a1'),
-    ('length alone',               '0,0,1,0,0,0,0', 'a1'),
-    ('stress alone',               '0,0,0,1,0,0,0', 'a1'),
-    ('orthogonality alone',        '0,0,0,0,1,0,0', 'a1'),
-    ('alignment A1 alone',         '0,0,0,0,0,1,0', 'a1'),
-    ('alignment A3 alone',         '0,0,0,0,0,1,0', 'a3'),
-    ('gridiness alone',            '0,0,0,0,0,1,0', 'grid'),
-    ('node-edge alone',            '0,0,0,0,0,0,1', 'a1'),
-    ('C+O',                        '1,1,0,0,0,0,0', 'a1'),
-    ('C+O+L',                      '1,1,1,0,0,0,0', 'a1'),
-    ('C+O+S',                      '1,1,0,1,0,0,0', 'a1'),
-    ('C+O+R',                      '1,1,0,0,1,0,0', 'a1'),
-    ('C+O+A1',                     '1,1,0,0,0,1,0', 'a1'),
-    ('C+O+A3',                     '1,1,0,0,0,1,0', 'a3'),
-    ('C+O+grid',                   '1,1,0,0,0,1,0', 'grid'),
-    ('C+O+N',                      '1,1,0,0,0,0,1', 'a1'),
+    ('crossings alone',            '1,0,0,0,0,0,0,0', 'a1'),
+    ('overlap alone',              '0,1,0,0,0,0,0,0', 'a1'),
+    ('length alone',               '0,0,1,0,0,0,0,0', 'a1'),
+    ('stress alone',               '0,0,0,1,0,0,0,0', 'a1'),
+    ('orthogonality alone',        '0,0,0,0,1,0,0,0', 'a1'),
+    ('alignment A1 alone',         '0,0,0,0,0,1,0,0', 'a1'),
+    ('alignment A3 alone',         '0,0,0,0,0,1,0,0', 'a3'),
+    ('gridiness alone',            '0,0,0,0,0,1,0,0', 'grid'),
+    ('node-edge alone',            '0,0,0,0,0,0,1,0', 'a1'),
+    ('flow alone',                 '0,0,0,0,0,0,0,1', 'a1'),
+    ('C+O',                        '1,1,0,0,0,0,0,0', 'a1'),
+    ('C+O+L',                      '1,1,1,0,0,0,0,0', 'a1'),
+    ('C+O+S',                      '1,1,0,1,0,0,0,0', 'a1'),
+    ('C+O+R',                      '1,1,0,0,1,0,0,0', 'a1'),
+    ('C+O+A1',                     '1,1,0,0,0,1,0,0', 'a1'),
+    ('C+O+A3',                     '1,1,0,0,0,1,0,0', 'a3'),
+    ('C+O+grid',                   '1,1,0,0,0,1,0,0', 'grid'),
+    ('C+O+N',                      '1,1,0,0,0,0,1,0', 'a1'),
+    ('C+O+F',                      '1,1,0,0,0,0,0,1', 'a1'),
 ]
 SWEEP_D = ['0.005', '0.01', '0.02', '0.05']
 
@@ -45,10 +48,11 @@ def bootstrap(xs, reps=1000, seed=1):
     meds = sorted(st.median(rng.choices(xs, k=len(xs))) for _ in range(reps))
     return meds[int(0.025 * reps)], meds[int(0.975 * reps) - 1]
 
-def run(station, corpus, weights, align, d, dirs, lref, ci):
+def run(station, corpus, weights, align, d, dirs, lref, ci, save=None):
     o = subprocess.run([station, 'direct', '--corpus', corpus, '--weights', weights,
                         '--align', align, '--d', d, '--dirs', dirs, '--L', lref],
                        capture_output=True, text=True, check=True).stdout
+    if save: open(save, 'w').write(o)
     rows = list(csv.DictReader(io.StringIO(o)))
     term = [t for t, x in zip(TERMS, weights.split(',')) if x != '0']
     qs = [float(r['q']) for r in rows]
@@ -99,7 +103,7 @@ def emit(head, table, md):
         for r in table: print('%-24s' % r[0] + ''.join(('%' + str(w) + 's') % v for v in r[1:]))
 
 if __name__ == '__main__':
-    d, dirs, lref, md, ci, sweep, tex = '0.02', '16', 'fit', False, False, False, False
+    d, dirs, lref, md, ci, sweep, tex, save = '0.02', '16', 'fit', False, False, False, False, None
     station = os.path.join(HERE, '..', '..', 'station')
     layouts, only = LAYOUTS, None
     a = sys.argv[1:]
@@ -113,6 +117,7 @@ if __name__ == '__main__':
         elif a[0] == '--md': md = True; a = a[1:]
         elif a[0] == '--tex': tex = True; a = a[1:]
         elif a[0] == '--ci': ci = True; a = a[1:]
+        elif a[0] == '--save': save = a[1]; os.makedirs(save, exist_ok=True); a = a[2:]
         elif a[0] == '--sweep': sweep = True; a = a[1:]
         else: sys.exit('unknown argument ' + a[0])
     energies = [e for e in ENERGIES if not only or e[0] in only]
@@ -139,7 +144,8 @@ if __name__ == '__main__':
         row = [name]
         for layout in layouts:
             for cname, stem in CORPORA:
-                q, iv, v, k = run(station, corpus_file(stem, layout), w, al, d, dirs, lref, ci)
+                out = save and os.path.join(save, '%s_%s_%s.csv' % (stem, layout, name.replace(' ', '_').replace('+', '')))
+                q, iv, v, k = run(station, corpus_file(stem, layout), w, al, d, dirs, lref, ci, out)
                 counts['%s %s' % (cname, layout)] = k
                 results[(name, layout, cname)] = (q, iv, v)
                 row.append(cell(q, iv, v))

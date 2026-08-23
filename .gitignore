@@ -18,3 +18,4 @@ movie_frames/
 station
 station_asan
 station_ubsan
+.venv/

@@ -110,6 +110,65 @@ static double moves_probe(const double *x, void *ctx)
     return f;
 }
 
+/* Records the first point a run scores, which is what cjitter_problem.start names. */
+typedef struct {
+    long   n, calls;
+    double first[8];
+} First;
+
+static double first_probe(const double *x, void *ctx)
+{
+    First *w = ctx;
+    double f = 0;
+    long j;
+    for (j = 0; j < w->n; j++) {
+        if (w->calls == 0) w->first[j] = x[j];
+        f += (x[j] - 0.25) * (x[j] - 0.25);
+    }
+    w->calls++;
+    return f;
+}
+
+/* A repair that is a projection rather than a clamp: every point onto the disc of radius 1
+ * about the origin, the shape the diagram experiment constrains a node to. The objective's
+ * optimum is outside the disc, so the search presses against the constraint instead of
+ * settling away from it, which is the case where a repair that overshoots would put a point
+ * outside the box. The probe watches the box and the disc on every point it is handed. */
+#define DISC_R 1.0
+
+typedef struct {
+    const double *lo, *hi;
+    long n, calls;
+    int  outside, offdisc;
+} Disc;
+
+static double disc_probe(const double *x, void *ctx)
+{
+    Disc *d = ctx;
+    double f = 0, q = 0;
+    long j;
+    d->calls++;
+    for (j = 0; j < d->n; j++) {
+        if (x[j] < d->lo[j] || x[j] > d->hi[j]) d->outside = 1;
+        q += x[j] * x[j];
+        f += (x[j] - 3.0) * (x[j] - 3.0);
+    }
+    if (q > DISC_R * DISC_R * (1.0 + 1e-12)) d->offdisc = 1;
+    return f;
+}
+
+static void disc_repair(double *x, void *ctx)
+{
+    Disc *d = ctx;
+    double q = 0;
+    long j;
+    for (j = 0; j < d->n; j++) q += x[j] * x[j];
+    if (q > DISC_R * DISC_R) {
+        double k = DISC_R / sqrt(q);
+        for (j = 0; j < d->n; j++) x[j] *= k;
+    }
+}
+
 int main(void)
 {
     static const double lo2[2] = { -5, -5 }, hi2[2] = { 5, 5 };
@@ -138,7 +197,7 @@ int main(void)
     /* Every bad argument is a -1, not a crash and not a silent default. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 100, 1 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
@@ -175,7 +234,7 @@ int main(void)
     /* A fitness that never returns a finite value: the returned point must still be one that
      * was scored, inside the box, never uninitialized memory handed back with rc 0. */
     {
-        cjitter_problem p = { 2, lo2, hi2, always_worst, NULL, NULL };
+        cjitter_problem p = { 2, lo2, hi2, always_worst, NULL, NULL, NULL };
         cjitter_budget b = { 50, 1 };
         double x[2] = { 12345.0, 67890.0 };
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
@@ -196,7 +255,7 @@ int main(void)
             char msg[96];
             for (bi = 0; bi < 3; bi++) {
                 Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-                cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+                cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
                 cjitter_budget b = { 0, 7 };
                 double x[2], y[2];
                 cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
@@ -232,7 +291,7 @@ int main(void)
         int held = 1, returned = 1;
         for (m = 0; cjitter_methods[m]; m++) {
             Watch w = { lo2, hi2, 2, 0, 0, 0, 1, HUGE_VAL };
-            cjitter_problem p = { 2, lo2, hi2, watched_sphere, floor_first, &w };
+            cjitter_problem p = { 2, lo2, hi2, watched_sphere, floor_first, &w, NULL };
             cjitter_budget b = { 400, 3 };
             cjitter_tuning tw = cjitter_tuning_default(2);
             double x[2];
@@ -253,7 +312,7 @@ int main(void)
      * is a real mutation ablation that runs. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 300, 9 };
         cjitter_tuning dflt = cjitter_tuning_default(2);
         cjitter_tuning zero = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -316,7 +375,7 @@ int main(void)
         static const double lo8[8] = { -5, -5, -5, -5, -5, -5, -5, -5 };
         static const double hi8[8] = {  5,  5,  5,  5,  5,  5,  5,  5 };
         Watch w = { lo8, hi8, 8, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 8, lo8, hi8, watched_sphere, NULL, &w };
+        cjitter_problem p = { 8, lo8, hi8, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 400, 3 };
         cjitter_tuning dflt = cjitter_tuning_default(8);
         cjitter_tuning t;
@@ -343,7 +402,7 @@ int main(void)
          * not move, and copying the wrong ones is exactly how that invariant would break. */
         for (m = 0; cjitter_methods[m]; m++) {
             Watch wr = { lo8, hi8, 8, 0, 0, 0, 1, HUGE_VAL };
-            cjitter_problem pr = { 8, lo8, hi8, watched_sphere, floor_first, &wr };
+            cjitter_problem pr = { 8, lo8, hi8, watched_sphere, floor_first, &wr, NULL };
             cjitter_result rr = { 0, x, 0, 0, NULL, 0, 0, 0 };
             t = dflt; t.block = 1;
             if (cjitter_run_tuned(cjitter_methods[m], &pr, &b, &t, &rr) != 0 ||
@@ -360,7 +419,7 @@ int main(void)
          * the next one differ in their own block and the one before it, never in more). */
         {
             Moves mv;
-            cjitter_problem pm = { 8, lo8, hi8, moves_probe, NULL, &mv };
+            cjitter_problem pm = { 8, lo8, hi8, moves_probe, NULL, &mv, NULL };
             cjitter_result rm = { 0, x, 0, 0, NULL, 0, 0, 0 };
             long j, all = 1;
             memset(&mv, 0, sizeof mv);
@@ -378,7 +437,7 @@ int main(void)
             static const double lo5[5] = { -5, -5, -5, -5, -5 };
             static const double hi5[5] = {  5,  5,  5,  5,  5 };
             Moves mv;
-            cjitter_problem pm = { 5, lo5, hi5, moves_probe, NULL, &mv };
+            cjitter_problem pm = { 5, lo5, hi5, moves_probe, NULL, &mv, NULL };
             cjitter_result rm = { 0, x, 0, 0, NULL, 0, 0, 0 };
             cjitter_tuning t5 = cjitter_tuning_default(5);
             memset(&mv, 0, sizeof mv);
@@ -401,7 +460,7 @@ int main(void)
     {
         static const double lo3[3] = { -2, -2, -2 }, hi3[3] = { 2, 2, 2 };
         Watch w = { lo3, hi3, 3, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 3, lo3, hi3, watched_sphere, NULL, &w };
+        cjitter_problem p = { 3, lo3, hi3, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 300, 5 };
         cjitter_tuning dflt = cjitter_tuning_default(3);
         cjitter_tuning t;
@@ -428,10 +487,15 @@ int main(void)
         CHECK(r.evals == b.evals && w.calls == b.evals + 25,
               "verify: its evaluations are extra, so the search budget is untouched");
 
+        t = dflt; t.verify = 1;
+        CHECK(cjitter_run_tuned("climb", &p, &b, &t, &r) == 0 &&
+              r.verified == r.best && r.inflation == 0 && r.verify_evals == 1,
+              "verify: at one evaluation the inflation is exactly 0, not a rounding of it");
+
         /* The case it exists for: observations that differ from what the point is worth. */
         {
             Watch wa = { lo3, hi3, 3, 0, 0, 0, 0, HUGE_VAL };
-            cjitter_problem pa = { 3, lo3, hi3, alternating, NULL, &wa };
+            cjitter_problem pa = { 3, lo3, hi3, alternating, NULL, &wa, NULL };
             cjitter_result ra = { 0, x, 0, 0, NULL, 0, 0, 0 };
             t = dflt; t.verify = 40;
             CHECK(cjitter_run_tuned("climb", &pa, &b, &t, &ra) == 0 &&
@@ -471,7 +535,7 @@ int main(void)
      * valid or it is not, whoever reads which field. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 200, 11 };
         cjitter_tuning tb;
         double x[2], y[2], z2[2];
@@ -502,7 +566,7 @@ int main(void)
     /* Seed 0 is remapped inside run as it is in rng, so it works and reproduces. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 50, 0 };
         double x[2], y[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 }, r2 = { 0, y, 0, 0, NULL, 0, 0, 0 };
@@ -515,7 +579,7 @@ int main(void)
      * still spends exactly and never indexes past what was scored. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 10, 1 };
         cjitter_tuning tp = cjitter_tuning_default(2);
         double x[2];
@@ -530,7 +594,7 @@ int main(void)
      * jitter, acceptance, the shrinking scale and the restart. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 5000, 1 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
@@ -549,7 +613,7 @@ int main(void)
      * re-derived by probing again, not re-pinned to the new number. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 5000, 160 };
         double x[2];
         cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
@@ -564,7 +628,7 @@ int main(void)
      * the same bytes. */
     {
         Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
-        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
         cjitter_budget b = { 200, 1 };
         char buf[4096], buf2[4096];
         size_t got, got2;
@@ -597,6 +661,232 @@ int main(void)
         fclose(f);
         CHECK(got == got2 && memcmp(buf, buf2, got) == 0,
               "compare: the same call gives the same bytes");
+    }
+
+    /* start: where a run begins when the caller has a point in mind. NULL is every release
+     * before 0.13.0, a uniform draw. Otherwise climb and anneal score it first and the ga
+     * carries it as member 0, bit for bit, and random ignores it, because a control handed
+     * the answer is not a control. */
+    {
+        static const double lo3[3] = { -5, -5, -5 }, hi3[3] = { 5, 5, 5 };
+        static const double s0[3] = { 1.5, -2.25, 0.75 };
+        cjitter_budget b = { 100, 4 };
+        double x[3];
+        long m;
+        int exact = 1, ignored = 0, atone = 1;
+
+        for (m = 0; cjitter_methods[m]; m++) {
+            First w;
+            cjitter_problem p = { 3, lo3, hi3, first_probe, NULL, &w, s0 };
+            cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
+            memset(&w, 0, sizeof w);
+            w.n = 3;
+            if (cjitter_run(cjitter_methods[m], &p, &b, &r) != 0) exact = 0;
+            if (m == 0) ignored = memcmp(w.first, s0, sizeof s0) != 0;
+            else if (memcmp(w.first, s0, sizeof s0) != 0) exact = 0;
+        }
+        CHECK(exact, "start: climb, anneal and the ga score it first, bit for bit");
+        CHECK(ignored, "start: random ignores it and draws uniformly, as a control must");
+
+        /* At a budget of one there is nothing but the start, so best is its fitness exactly
+         * and the point returned is the point handed in. */
+        for (m = 1; cjitter_methods[m]; m++) {
+            First w, w2;
+            cjitter_problem p = { 3, lo3, hi3, first_probe, NULL, &w, s0 };
+            cjitter_budget b1 = { 1, 4 };
+            cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
+            double want;
+            memset(&w, 0, sizeof w); memset(&w2, 0, sizeof w2);
+            w.n = 3; w2.n = 3;
+            want = first_probe(s0, &w2);
+            if (cjitter_run(cjitter_methods[m], &p, &b1, &r) != 0 ||
+                r.best != want || memcmp(x, s0, sizeof s0) != 0) atone = 0;
+        }
+        CHECK(atone, "start: at a budget of one, best is its fitness and x is the start point");
+
+        /* It is not exempt from the box: a start outside is brought in like any other point. */
+        {
+            static const double out3[3] = { 99, -99, 0.5 };
+            First w;
+            cjitter_problem p = { 3, lo3, hi3, first_probe, NULL, &w, out3 };
+            cjitter_budget b1 = { 1, 4 };
+            cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
+            memset(&w, 0, sizeof w);
+            w.n = 3;
+            CHECK(cjitter_run("climb", &p, &b1, &r) == 0 &&
+                  w.first[0] == hi3[0] && w.first[1] == lo3[1] && w.first[2] == 0.5,
+                  "start: one outside the box is brought in, like every other point");
+        }
+    }
+
+    /* The box under a repair that projects rather than clamps. Every point the search scores
+     * and the point it returns must satisfy both the box and the disc; a repair that
+     * overshoots is exactly how a scored point leaves the box, and nothing else here checks
+     * the box while a repair is moving points. */
+    {
+        static const double lo3[3] = { -2, -2, -2 }, hi3[3] = { 2, 2, 2 };
+        cjitter_budget b = { 500, 6 };
+        double x[3];
+        int held = 1;
+        long m;
+        for (m = 0; m < 2; m++) {
+            Disc d;
+            cjitter_problem p = { 3, lo3, hi3, disc_probe, disc_repair, &d, NULL };
+            cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
+            memset(&d, 0, sizeof d);
+            d.lo = lo3; d.hi = hi3; d.n = 3;
+            if (cjitter_run(m == 0 ? "random" : "climb", &p, &b, &r) != 0) held = 0;
+            disc_probe(x, &d);      /* the returned point, watched like the rest */
+            if (d.calls != b.evals + 1 || d.outside || d.offdisc) held = 0;
+        }
+        CHECK(held, "box: under a disc repair every scored point and the returned point hold "
+                    "the box and the disc, for random and climb");
+    }
+
+    /* jitter 0: the first move size is zero, so every proposal is its parent, nothing ever
+     * moves and the run reports the fitness of its first point. The ablation check above sees
+     * only that such a run is accepted; this one looks at the trajectory. */
+    {
+        static const double lo8[8] = { -5, -5, -5, -5, -5, -5, -5, -5 };
+        static const double hi8[8] = {  5,  5,  5,  5,  5,  5,  5,  5 };
+        cjitter_budget b = { 200, 12 };
+        cjitter_tuning t = cjitter_tuning_default(8);
+        double x[8];
+        int pinned = 1;
+        long m, j;
+        t.jitter = 0;
+        for (m = 1; m <= 2; m++) {          /* climb and anneal: the two that jitter a parent */
+            Moves mv;
+            cjitter_problem p = { 8, lo8, hi8, moves_probe, NULL, &mv, NULL };
+            cjitter_result r = { 0, x, 0, 0, NULL, 0, 0, 0 };
+            double f0 = 0;
+            memset(&mv, 0, sizeof mv);
+            mv.n = 8;
+            if (cjitter_run_tuned(cjitter_methods[m], &p, &b, &t, &r) != 0) pinned = 0;
+            for (j = 0; j < 8; j++) {
+                if (mv.moved[j]) pinned = 0;
+                f0 += mv.first[j] * mv.first[j];
+            }
+            if (mv.widest != 0 || mv.calls != b.evals || r.restarts != 0) pinned = 0;
+            if (r.best != f0 || memcmp(x, mv.first, sizeof x) != 0) pinned = 0;
+        }
+        CHECK(pinned, "jitter 0: every proposal is the parent, so nothing moves and best is "
+                      "the first point's fitness");
+    }
+
+    /* The two statistics the verdict column is made of, against values computable by hand:
+     * seven wins in seven is one coin sequence in 128, no wins at all is certain, and Holm
+     * multiplies the smallest of three probabilities by three and the next by two, holding
+     * each at the largest so far. */
+    {
+        static const double pin[3] = { 0.01, 0.02, 0.04 };
+        double adj[3];
+        CHECK(cjitter_sign_p(7, 7) == 1.0 / 128.0, "sign_p: seven wins in seven is 1/128");
+        CHECK(cjitter_sign_p(0, 5) == 1.0, "sign_p: no wins in five is certain");
+        CHECK(cjitter_holm(pin, 3, adj) == 0 &&
+              adj[0] == 0.03 && adj[1] == 0.04 && adj[2] == 0.04,
+              "holm: (0.01, 0.02, 0.04) corrects to (0.03, 0.04, 0.04)");
+        CHECK(cjitter_holm(pin, 0, adj) == -1 && cjitter_holm(NULL, 3, adj) == -1,
+              "holm: an empty family and a NULL vector are refused");
+    }
+
+    /* compare_raw: the panel's numbers without the table. Every row must be the run it stands
+     * for, seed for seed and point for point, or a study computing its own estimand from
+     * these is not looking at the runs compare judged. */
+    {
+        Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
+        cjitter_budget b = { 60, 5 };
+        double sc[4 * 3], xs[4 * 3 * 2], infl[4 * 3];
+        long m, s;
+        int paired = 1;
+
+        for (m = 0; m < 12; m++) { sc[m] = -1.0; infl[m] = -1.0; }
+        CHECK(cjitter_compare_raw(&p, &b, NULL, 3, 0u, sc, xs, infl) == 0 &&
+              w.calls == 4 * 3 * 60,
+              "compare_raw: runs the panel, one budget per method per seed");
+        for (m = 0; m < 4; m++)
+            for (s = 0; s < 3; s++) {
+                cjitter_budget bb = b;
+                double y[2];
+                cjitter_result r = { 0, y, 0, 0, NULL, 0, 0, 0 };
+                bb.seed = 5u + 7919u * (uint32_t)s;   /* compare's own panel stride */
+                if (cjitter_run(cjitter_methods[m], &p, &bb, &r) != 0 ||
+                    sc[m * 3 + s] != r.best || infl[m * 3 + s] != 0 ||
+                    memcmp(xs + (m * 3 + s) * 2, y, sizeof y) != 0) paired = 0;
+            }
+        CHECK(paired, "compare_raw: every row is the run it stands for, point and all");
+
+        for (m = 0; m < 12; m++) sc[m] = -1.0;
+        w.calls = 0;
+        CHECK(cjitter_compare_raw(&p, &b, NULL, 3, CJITTER_M_RANDOM | CJITTER_M_CLIMB,
+                                  sc, NULL, NULL) == 0 && w.calls == 2 * 3 * 60 &&
+              sc[0] != -1.0 && sc[3] != -1.0 && sc[6] == -1.0 && sc[9] == -1.0,
+              "compare_raw: a mask runs and writes only the methods it names");
+        CHECK(cjitter_compare_raw(&p, &b, NULL, 3, 16u, sc, NULL, NULL) == -1 &&
+              cjitter_compare_raw(&p, &b, NULL, 3, 0u, NULL, NULL, NULL) == -1,
+              "compare_raw: a flag it does not have, and a NULL score, are refused");
+    }
+
+    /* The mask on the printed table. The full mask must be the bytes the unmasked call gives,
+     * or every number pinned anywhere moved; a partial one prints only what it ran and
+     * corrects over that family alone; and a panel without the control is refused, every
+     * verdict here being against it. */
+    {
+        Watch w = { lo2, hi2, 2, 0, 0, 0, 0, HUGE_VAL };
+        cjitter_problem p = { 2, lo2, hi2, watched_sphere, NULL, &w, NULL };
+        cjitter_budget b = { 200, 1 };
+        char buf[4096], buf2[4096];
+        size_t got = 0, got2 = 0;
+        FILE *f = tmpfile(), *g = tmpfile();
+
+        if (!f || !g) { CHECK(0, "compare_masked: tmpfile available"); return 1; }
+        cjitter_compare_tuned(&p, &b, NULL, 3, f);
+        cjitter_compare_masked(&p, &b, NULL, 3, CJITTER_M_ALL, g);
+        rewind(f); rewind(g);
+        got = fread(buf, 1, sizeof buf - 1, f);
+        got2 = fread(buf2, 1, sizeof buf2 - 1, g);
+        buf[got] = 0; buf2[got2] = 0;
+        fclose(f); fclose(g);
+        CHECK(got == got2 && memcmp(buf, buf2, got) == 0,
+              "compare_masked: all four is the table cjitter_compare_tuned prints, byte for byte");
+
+        CHECK(cjitter_compare_masked(&p, &b, NULL, 3, CJITTER_M_CLIMB, NULL) == -1 &&
+              cjitter_compare_masked(&p, &b, NULL, 3, 16u, NULL) == -1,
+              "compare_masked: a panel without the control, and an unknown flag, are refused");
+
+        f = tmpfile();
+        if (!f) { CHECK(0, "compare_masked: tmpfile available"); return 1; }
+        w.calls = 0;
+        CHECK(cjitter_compare_masked(&p, &b, NULL, 3,
+                                     CJITTER_M_RANDOM | CJITTER_M_CLIMB, f) == 0 &&
+              w.calls == 2 * 3 * 200,
+              "compare_masked: two methods cost two budgets a seed, not four");
+        rewind(f);
+        got = fread(buf, 1, sizeof buf - 1, f);
+        buf[got] = 0;
+        fclose(f);
+        CHECK(strstr(buf, "\nclimb") && !strstr(buf, "\nanneal") && !strstr(buf, "\nga"),
+              "compare_masked: it prints the rows it ran and no others");
+        {   /* One comparison in the family, so Holm multiplies by one and the two columns
+             * agree; at four methods they do not. */
+            char line[512];
+            double med = 0, range = 0, sp = -1, hp = -2;
+            long wins = 0, n = 0;
+            int read = 0;
+            char *at = strstr(buf, "\nclimb");
+            if (at) {
+                size_t len = strcspn(at + 1, "\n");
+                if (len < sizeof line) {
+                    memcpy(line, at + 1, len);
+                    line[len] = 0;
+                    read = sscanf(line + 5, "%lf %lf %ld/%ld %lf %lf",
+                                  &med, &range, &wins, &n, &sp, &hp);
+                }
+            }
+            CHECK(read == 6 && sp == hp,
+                  "compare_masked: a family of one is corrected by one, holm equal to sign-p");
+        }
     }
 
     printf("\n%d checks, %d failed\n", t_run, t_fail);

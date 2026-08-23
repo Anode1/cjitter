@@ -5,9 +5,9 @@
 #include <math.h>
 
 const char *const term_name[NTERMS] = {
-    "crossings", "overlap", "length", "stress", "orthogonality", "alignment", "node-edge"
+    "crossings", "overlap", "length", "stress", "orthogonality", "alignment", "node-edge", "flow"
 };
-const char term_letter[NTERMS + 1] = "COLSRAN";
+const char term_letter[NTERMS + 1] = "COLSRANF";
 
 double energy_exp_neg(double x)
 {
@@ -34,16 +34,32 @@ static int crosses(double ax, double ay, double bx, double by,
         && d1 != 0 && d2 != 0 && d3 != 0 && d4 != 0;
 }
 
+/* Point s of edge i's polyline, s = 0 at node ea, s = segments(i) at node eb. */
+static long segments(const graph *g, long i) { return g->wp[i + 1] - g->wp[i] + 1; }
+
+static void point(const graph *g, const double *x, long i, long s, double *px, double *py)
+{
+    long k = segments(g, i);
+    if (s == 0)      { *px = x[2 * g->ea[i]] + g->ofs[4 * i];     *py = x[2 * g->ea[i] + 1] + g->ofs[4 * i + 1]; }
+    else if (s == k) { *px = x[2 * g->eb[i]] + g->ofs[4 * i + 2]; *py = x[2 * g->eb[i] + 1] + g->ofs[4 * i + 3]; }
+    else { *px = g->wpx[2 * (g->wp[i] + s - 1)]; *py = g->wpx[2 * (g->wp[i] + s - 1) + 1]; }
+}
+
 static double t_crossings(const graph *g, const double *x)
 {
     long i, j, c = 0;
     for (i = 0; i < g->m; i++)
         for (j = i + 1; j < g->m; j++) {
+            long si, sj, ki = segments(g, i), kj = segments(g, j);
             if (g->ea[i] == g->ea[j] || g->ea[i] == g->eb[j] ||
                 g->eb[i] == g->ea[j] || g->eb[i] == g->eb[j]) continue;
-            if (crosses(x[2 * g->ea[i]], x[2 * g->ea[i] + 1], x[2 * g->eb[i]], x[2 * g->eb[i] + 1],
-                        x[2 * g->ea[j]], x[2 * g->ea[j] + 1], x[2 * g->eb[j]], x[2 * g->eb[j] + 1]))
-                c++;
+            for (si = 0; si < ki; si++)
+                for (sj = 0; sj < kj; sj++) {
+                    double ax, ay, bx, by, cx, cy, dx, dy;
+                    point(g, x, i, si, &ax, &ay); point(g, x, i, si + 1, &bx, &by);
+                    point(g, x, j, sj, &cx, &cy); point(g, x, j, sj + 1, &dx, &dy);
+                    if (crosses(ax, ay, bx, by, cx, cy, dx, dy)) c++;
+                }
         }
     return (double)c / (double)g->m;
 }
@@ -101,11 +117,18 @@ static double t_stress(const graph *g, const double *x, const energy_spec *e)
 
 static double t_orth(const graph *g, const double *x)
 {
-    long i;
+    long i, si;
     double s = 0;
     for (i = 0; i < g->m; i++) {
-        double dx = fabs(x[2 * g->ea[i]] - x[2 * g->eb[i]]), dy = fabs(x[2 * g->ea[i] + 1] - x[2 * g->eb[i] + 1]);
-        if (dx + dy > 0) s += (dx < dy ? dx : dy) / (dx + dy);
+        double num = 0, den = 0;
+        for (si = 0; si < segments(g, i); si++) {
+            double ax, ay, bx, by, dx, dy, len;
+            point(g, x, i, si, &ax, &ay); point(g, x, i, si + 1, &bx, &by);
+            dx = fabs(bx - ax); dy = fabs(by - ay);
+            len = sqrt(dx * dx + dy * dy);
+            if (dx + dy > 0) { num += len * (dx < dy ? dx : dy) / (dx + dy); den += len; }
+        }
+        if (den > 0) s += num / den;
     }
     return s / (double)g->m;
 }
@@ -141,29 +164,57 @@ static double t_align(const graph *g, const double *x, const energy_spec *e)
     return s / (double)g->n;
 }
 
+/* Squared distance from p to segment ab. */
+static double seg_dist2(double px, double py, double ax, double ay, double bx, double by)
+{
+    double ex = bx - ax, ey = by - ay, l2 = ex * ex + ey * ey, t = 0, qx, qy;
+    px -= ax; py -= ay;
+    if (l2 > 0) {
+        t = (px * ex + py * ey) / l2;
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
+    }
+    qx = px - t * ex; qy = py - t * ey;
+    return qx * qx + qy * qy;
+}
+
 static double t_nedge(const graph *g, const double *x)
 {
-    long i, j;
+    long i, j, si;
     double s = 0;
-    for (i = 0; i < g->m; i++) {
-        double ax = x[2 * g->ea[i]], ay = x[2 * g->ea[i] + 1];
-        double ex = x[2 * g->eb[i]] - ax, ey = x[2 * g->eb[i] + 1] - ay;
-        double l2 = ex * ex + ey * ey;
-        if (l2 <= 0) continue;
+    for (i = 0; i < g->m; i++)
         for (j = 0; j < g->n; j++) {
-            double px, py, t, qx, qy, dd, r;
+            double d2 = 1e300, dd, r;
             if (j == g->ea[i] || j == g->eb[i]) continue;
-            px = x[2 * j] - ax; py = x[2 * j + 1] - ay;
-            t = (px * ex + py * ey) / l2;
-            if (t < 0) t = 0;
-            if (t > 1) t = 1;
-            qx = px - t * ex; qy = py - t * ey;
-            dd = sqrt(qx * qx + qy * qy);
+            for (si = 0; si < segments(g, i); si++) {
+                double ax, ay, bx, by, q;
+                point(g, x, i, si, &ax, &ay); point(g, x, i, si + 1, &bx, &by);
+                q = seg_dist2(x[2 * j], x[2 * j + 1], ax, ay, bx, by);
+                if (q < d2) d2 = q;
+            }
+            dd = sqrt(d2);
             r = (g->w[j] + g->h[j]) / 4;
             if (r > 0 && dd < r) s += (r - dd) * (r - dd) / (r * r);
         }
-    }
     return s / (double)g->m;
+}
+
+double flow_along(const graph *g, const double *x, double ux, double uy)
+{
+    long i, k = 0;
+    double s = 0;
+    for (i = 0; i < g->m; i++) {
+        long a = g->dir[i] >= 0 ? g->ea[i] : g->eb[i], b = g->dir[i] >= 0 ? g->eb[i] : g->ea[i];
+        double dx, dy, len, back;
+        if (g->dir[i] == 0) continue;
+        dx = x[2 * b] - x[2 * a]; dy = x[2 * b + 1] - x[2 * a + 1];
+        len = sqrt(dx * dx + dy * dy);
+        k++;
+        if (len <= 0) continue;
+        back = -(dx * ux + dy * uy);
+        if (back > 0) s += back / len;
+    }
+    return k > 0 ? s / (double)k : 0;
 }
 
 double term_value(int k, const graph *g, const double *x, const energy_spec *e)
@@ -176,6 +227,7 @@ double term_value(int k, const graph *g, const double *x, const energy_spec *e)
     case TERM_R: return t_orth(g, x);
     case TERM_A: return t_align(g, x, e);
     case TERM_N: return t_nedge(g, x);
+    case TERM_F: return flow_along(g, x, g->ux, g->uy);
     }
     return 0;
 }
@@ -185,7 +237,9 @@ double energy(const graph *g, const double *x, const energy_spec *e, double t[NT
     int k;
     double s = 0;
     for (k = 0; k < NTERMS; k++) {
-        double v = term_value(k, g, x, e);
+        double v;
+        if (!t && !(e->w[k] > 0)) continue;
+        v = term_value(k, g, x, e);
         if (t) t[k] = v;
         s += e->w[k] * v;
     }
