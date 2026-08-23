@@ -1,7 +1,8 @@
 # diagrams: which aesthetic criteria hold a hand-drawn layout
 
-**People draw at a minimum of overlap and crossings, and nowhere near one of uniform edge
-length or stress; a tool's layout of the same graphs is the reverse.**
+**A hand layout is held by overlap, by nothing that prices distance, and by alignment for
+about half its boxes; of three tools laid out on the same graphs, the layered one matches
+that profile on every criterion but alignment, where it is exact.**
 
 A layout tool places the boxes of a diagram by minimising a weighted sum of criteria. If
 people drew the same way, a layout a person accepted would be a local minimum of every
@@ -10,7 +11,7 @@ directory tests that, one criterion at a time, on diagrams whose coordinates a p
 
     make station
     ./station direct --corpus example/diagrams/data/hs.txt --weights 1,1,0,0,0,0,0
-    make profile                 # the table below, about two minutes
+    make profile                 # the table below, about five minutes
 
 ## The test
 
@@ -21,14 +22,25 @@ layout is a local minimum over single-box moves of that length, 0 means every bo
 somewhere better to be. It needs no gradient, so it is defined for a crossing count and for
 the corners of the overlap term, and it needs no seed, so it reproduces exactly. For a term
 that is a count or a step (crossings, gridiness) a box is held wherever the term is flat, so
-the table prints the term's value beside q: 0 is satisfied.
+the table prints the term's value beside q: 0 is satisfied. A move that lowers the energy by
+less than 1e-12 of its value is a tie.
+
+The length and stress terms compare distances with a reference length L. Fixed at the median
+edge length, L is not the scale at which the term is least for the layout, so at a true
+minimum every box still has a scaling move that lowers the term: neato's stress layouts
+scored q = 0.07 to 0.12 under their own criterion. L is therefore fitted to the layout as
+loaded (sum of l squared over sum of l, over edges for length and over pair distance per hop
+for stress) and fixed before any move; neato's stress layouts then score 1.00. `--L median`
+and `--L rsqrt` (1 / sqrt n) are the sensitivities.
 
 ## The corpora
 
 Three communities, three authoring tools, every diagram's largest connected component of 15
 to 40 boxes (`data/make_corpus.py` takes the component and says why). Beside each, the same
-graphs with the same box sizes laid out by `neato`, graphviz's stress layout, seeded so the
-file reproduces: what a layout that does minimise something looks like under the same test.
+graphs with the same box sizes laid out by three graphviz tools, what a layout that does
+minimise something looks like under the same test: `neato` (stress, seeded so the file
+reproduces, boxes left where they overlap), `prism` (neato followed by its overlap removal,
+`-Goverlap=false`) and `dot` (layered). `station check` confirms a control is the same graphs.
 
 | corpus | source | graphs | median edges per box |
 | --- | --- | --- | --- |
@@ -45,52 +57,60 @@ gridiness), node-edge separation N.
 
 ## The profile
 
-Median q over graphs at d = 0.02, 16 directions. Hand layouts, then neato's layouts of the
-same graphs. In brackets, for a single term, the median value of that term at the layout.
+Median q over graphs at d = 0.02, 16 directions, fitted L. Hand layouts, then the three tools'
+layouts of the same graphs. In brackets, for a single term, the median value of that term at
+the layout. `make profile` prints the same table with a 95% bootstrap interval on every median
+(1000 resamples of graphs); the widest on a hand cell spans 0.15.
 
-| energy | WikiPathways hand | Reactome hand | BPMN hand | WikiPathways neato | Reactome neato | BPMN neato |
-|---|---|---|---|---|---|---|
-| crossings alone | 1.00 (0.038) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
-| overlap alone | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.60 (0.030) | 0.76 (0.022) | 0.39 (0.082) |
-| length alone | 0.03 (0.376) | 0.04 (0.468) | 0.06 (0.549) | 0.26 (0.012) | 0.41 (0.005) | 0.43 (0.005) |
-| stress alone | 0.00 (0.240) | 0.00 (0.240) | 0.00 (0.224) | 0.07 (0.060) | 0.08 (0.054) | 0.12 (0.031) |
-| orthogonality alone | 0.16 (0.193) | 0.05 (0.225) | 0.41 (0.140) | 0.00 (0.280) | 0.00 (0.277) | 0.00 (0.286) |
-| alignment A1 alone | 0.44 (0.003) | 0.16 (0.004) | 0.80 (0.001) | 0.04 (0.011) | 0.05 (0.009) | 0.04 (0.011) |
-| alignment A3 alone | 0.19 (0.284) | 0.09 (0.300) | 0.27 (0.214) | 0.00 (0.446) | 0.00 (0.430) | 0.00 (0.452) |
-| gridiness alone | 0.87 (0.424) | 0.65 (0.640) | 0.90 (0.231) | 0.78 (1.000) | 0.77 (1.000) | 0.78 (1.000) |
-| node-edge alone | 0.76 (0.022) | 0.85 (0.006) | 0.86 (0.006) | 0.89 (0.000) | 0.93 (0.000) | 0.91 (0.000) |
-| C+O | 1.00 | 1.00 | 1.00 | 0.60 | 0.76 | 0.39 |
-| C+O+L (1,1,1) | 0.04 | 0.04 | 0.07 | 0.18 | 0.35 | 0.24 |
-| C+O+S | 0.00 | 0.00 | 0.00 | 0.04 | 0.07 | 0.05 |
-| C+O+R | 0.17 | 0.06 | 0.41 | 0.00 | 0.00 | 0.00 |
-| C+O+A1 | 0.47 | 0.17 | 0.74 | 0.03 | 0.04 | 0.04 |
-| C+O+A3 | 0.24 | 0.11 | 0.29 | 0.03 | 0.03 | 0.00 |
-| C+O+grid | 0.83 | 0.64 | 0.82 | 0.45 | 0.52 | 0.30 |
-| C+O+N | 0.76 | 0.84 | 0.80 | 0.55 | 0.71 | 0.38 |
-
+| energy | WikiPathways hand | Reactome hand | BPMN hand | WikiPathways neato | Reactome neato | BPMN neato | WikiPathways prism | Reactome prism | BPMN prism | WikiPathways dot | Reactome dot | BPMN dot |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| crossings alone | 1.00 (0.038) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.118) | 1.00 (0.120) | 1.00 (0.065) |
+| overlap alone | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.60 (0.030) | 0.76 (0.022) | 0.39 (0.082) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
+| length alone | 0.00 (0.219) | 0.00 (0.234) | 0.00 (0.244) | 0.24 (0.011) | 0.35 (0.005) | 0.39 (0.005) | 0.19 (0.014) | 0.26 (0.009) | 0.27 (0.010) | 0.00 (0.301) | 0.00 (0.301) | 0.00 (0.150) |
+| stress alone | 0.00 (0.217) | 0.00 (0.212) | 0.00 (0.189) | 1.00 (0.042) | 1.00 (0.034) | 1.00 (0.017) | 0.94 (0.044) | 0.85 (0.042) | 0.86 (0.023) | 0.00 (0.239) | 0.00 (0.239) | 0.00 (0.188) |
+| orthogonality alone | 0.16 (0.193) | 0.05 (0.225) | 0.41 (0.140) | 0.00 (0.280) | 0.00 (0.277) | 0.00 (0.286) | 0.00 (0.281) | 0.00 (0.277) | 0.00 (0.286) | 0.14 (0.251) | 0.13 (0.262) | 0.14 (0.225) |
+| alignment A1 alone | 0.52 (0.003) | 0.21 (0.004) | 0.82 (0.001) | 0.06 (0.011) | 0.06 (0.009) | 0.07 (0.011) | 0.07 (0.010) | 0.06 (0.010) | 0.07 (0.011) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) |
+| alignment A3 alone | 0.20 (0.284) | 0.10 (0.300) | 0.27 (0.214) | 0.03 (0.446) | 0.03 (0.430) | 0.00 (0.452) | 0.03 (0.451) | 0.03 (0.428) | 0.00 (0.450) | 0.40 (0.159) | 0.35 (0.142) | 0.38 (0.188) |
+| gridiness alone | 0.87 (0.424) | 0.65 (0.640) | 0.90 (0.231) | 0.78 (1.000) | 0.77 (1.000) | 0.78 (1.000) | 0.79 (1.000) | 0.75 (1.000) | 0.79 (1.000) | 1.00 (0.059) | 1.00 (0.062) | 1.00 (0.111) |
+| node-edge alone | 0.76 (0.022) | 0.85 (0.006) | 0.86 (0.006) | 0.89 (0.000) | 0.93 (0.000) | 0.91 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 1.00 (0.000) | 0.62 (0.029) | 0.65 (0.023) | 0.81 (0.006) |
+| C+O | 1.00 | 1.00 | 1.00 | 0.60 | 0.76 | 0.39 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| C+O+L | 0.00 | 0.00 | 0.00 | 0.17 | 0.33 | 0.23 | 0.19 | 0.27 | 0.27 | 0.00 | 0.00 | 0.00 |
+| C+O+S | 0.00 | 0.00 | 0.00 | 0.60 | 0.76 | 0.43 | 0.94 | 0.89 | 0.91 | 0.00 | 0.00 | 0.00 |
+| C+O+R | 0.17 | 0.06 | 0.41 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.15 | 0.14 | 0.14 |
+| C+O+A1 | 0.50 | 0.22 | 0.75 | 0.04 | 0.05 | 0.05 | 0.07 | 0.07 | 0.09 | 0.94 | 0.93 | 1.00 |
+| C+O+A3 | 0.25 | 0.11 | 0.33 | 0.03 | 0.03 | 0.03 | 0.03 | 0.03 | 0.03 | 0.53 | 0.58 | 0.50 |
+| C+O+grid | 0.84 | 0.64 | 0.83 | 0.45 | 0.52 | 0.30 | 0.79 | 0.75 | 0.79 | 0.97 | 0.97 | 0.94 |
+| C+O+N | 0.76 | 0.84 | 0.81 | 0.55 | 0.71 | 0.38 | 1.00 | 1.00 | 1.00 | 0.64 | 0.65 | 0.82 |
 
 Read down the hand columns. Overlap holds every box and is satisfied (value 0): people never
-let boxes overlap. Crossings hold every box in both layouts, because at radius 0.02 no
-single box can remove one; the value says the hand layouts have few to remove. Uniform edge
-length and stress hold almost none: every box has a move that evens the lengths, which is
-what a tool would do first and what the person did not. The three-term energy tools use,
-C+O+L, inherits the length term's verdict, which is what an earlier version of this study
-reported as "hand layouts are not stationary". Alignment with a corner (A1) holds half the
-WikiPathways boxes and four in five BPMN boxes; neato's columns read the other way on every
-row that separates them.
+let boxes overlap, and neither does any tool that removes overlaps, so C+O separates a hand
+layout from neato's configuration and from nothing else. Crossings hold every box in every
+layout, because at radius 0.02 no single box can remove one; the value says WikiPathways
+authors leave about one crossing per 26 edges where neato leaves none and dot leaves three.
+Uniform edge length and stress hold no hand box: every box has a move that evens the
+distances, which is what neato did (stress 1.00) and what the person and dot did not (0.00).
+The three-term energy tools use, C+O+L, inherits the length term's verdict, which is what an
+earlier version of this study reported as "hand layouts are not stationary". Alignment with
+a corner (A1) holds half the WikiPathways boxes, a fifth of Reactome's and four in five BPMN
+boxes, against 0.06 for neato and 1.00 for dot, whose layers put every box in a row; by the
+gridiness value, 58%, 36% and 77% of hand-placed boxes are in an alignment of three or more,
+none of neato's, 94%, 94% and 89% of dot's. On every term but alignment the hand column
+reads as dot's column does.
 
 ## Files
 
     energy.h energy.c    the terms; + - * / fabs sqrt and a polynomial exp, nothing else
     corpus.h corpus.c    the text format, the inclusion refusals, rescaling, L, distances
-    station.c            direct (the test, per graph or per box) and terms (the values)
-    profile.py           the table above over every corpus and declared energy
-    data/make_corpus.py  pilot JSON to text corpora, the component taken here; --neato
-    data/*.txt           the corpora; fixture.txt is three hand-computable layouts
+    station.c            direct (the test, per graph or per box), terms (the values), check
+    profile.py           the table above; --ci intervals, --sweep the radius sweep, --tex
+    data/make_corpus.py  pilot JSON to text corpora, the component taken here; --tool controls
+    data/*.txt           the corpora and their controls; fixture.txt, four hand-computable layouts
     pilot/               the exploratory run of 2026-08-21, superseded, defects declared
 
-`tests/diagrams.sh` pins the fixture's term values, worked out by hand, the directional
-verdicts on them, order independence, every refusal, and that `energy.o` calls no
+`tests/diagrams.sh` (87 checks, under two seconds) pins the fixture's term values, worked
+out by hand under every reference length, the directional verdicts on them including the
+4-cycle that is a stress minimum at its fitted scale and at no other, order independence,
+every refusal, that every control is the same graphs as its corpus, the q of the first
+twenty graphs of each corpus under four energies, and that `energy.o` calls no
 transcendental libm. The descent through the library, the matched-budget control, and the
-weight fit are the next steps; the pre-registration governing them is in the articles
-repository.
+weight fit are the next steps.

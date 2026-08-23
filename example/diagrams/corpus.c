@@ -40,11 +40,11 @@ static int cmp_double(const void *a, const void *b)
     return x < y ? -1 : x > y;
 }
 
-/* Rescale, the reference length, and the distances. Returns an error message or NULL. */
+/* Rescale, the reference lengths, and the distances. Returns an error message or NULL. */
 static const char *finish(graph *g)
 {
     long i, j, head, tail, *queue;
-    double minx = 1e300, miny = 1e300, maxx = -1e300, maxy = -1e300, s, *len;
+    double minx = 1e300, miny = 1e300, maxx = -1e300, maxy = -1e300, s, a, b, *len;
     for (i = 0; i < g->n; i++) {
         if (g->x[2 * i] < minx) minx = g->x[2 * i];
         if (g->x[2 * i] > maxx) maxx = g->x[2 * i];
@@ -53,6 +53,7 @@ static const char *finish(graph *g)
     }
     s = maxx - minx > maxy - miny ? maxx - minx : maxy - miny;
     if (!(s > 0)) return "zero extent";
+    g->scale = s;
     for (i = 0; i < g->n; i++) {
         g->x[2 * i] = (g->x[2 * i] - minx) / s;
         g->x[2 * i + 1] = (g->x[2 * i + 1] - miny) / s;
@@ -67,9 +68,12 @@ static const char *finish(graph *g)
         len[i] = sqrt(dx * dx + dy * dy);
     }
     qsort(len, (size_t)g->m, sizeof *len, cmp_double);
-    g->L = len[g->m / 2];
+    g->L_median = len[g->m / 2];
+    a = b = 0;
+    for (i = 0; i < g->m; i++) { a += len[i]; b += len[i] * len[i]; }
+    g->L_len = a > 0 ? b / a : 0;
     free(len);
-    if (!(g->L > 0)) return "median edge length is zero";
+    if (!(g->L_median > 0)) return "median edge length is zero";
 
     g->dist = malloc((size_t)(g->n * g->n) * sizeof *g->dist);
     queue = malloc((size_t)g->n * sizeof *queue);
@@ -88,6 +92,14 @@ static const char *finish(graph *g)
         if (tail < g->n) { free(queue); return "not connected"; }
     }
     free(queue);
+    a = b = 0;
+    for (i = 0; i < g->n; i++)
+        for (j = i + 1; j < g->n; j++) {
+            double dx = g->x[2 * i] - g->x[2 * j], dy = g->x[2 * i + 1] - g->x[2 * j + 1];
+            double q = sqrt(dx * dx + dy * dy) / (double)g->dist[i * g->n + j];
+            a += q; b += q * q;
+        }
+    g->L_stress = b / a;
     return NULL;
 }
 

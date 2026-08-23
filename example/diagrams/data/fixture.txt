@@ -1,4 +1,4 @@
-# Three hand-computable layouts for tests/diagrams.sh. Extents are already 1, so rescaling
+# Four hand-computable layouts for tests/diagrams.sh. Extents are already 1, so rescaling
 # is the identity and the numbers below can be checked by hand.
 # square: a unit square with both diagonals. The diagonals cross (C = 1/6), each is at 45
 # degrees (R = 1/6), the sides are length 1 and the diagonals sqrt 2 with median 1.
@@ -27,3 +27,17 @@ V 0.05 0 0.2 0.2
 V 1 1 0.2 0.2
 E 0 2
 E 1 2
+# cycle: the unit square without its diagonals. By symmetry a square is the stress-optimal
+# shape of a 4-cycle, so at the fitted scale it is a stress minimum: pair ratios r/d are 1
+# (four edges) and sqrt2/2 (two diagonals at two hops), L = (4 + 1/2) / (4 + sqrt2) = 0.923495,
+# stress = (4 (1/L - 1)^2 + 2 (sqrt2/2/L - 1)^2) / 6 = 0.022876. Under the median L = 1 the
+# diagonals are too short and every corner has an outward move that lowers the stress.
+G cycle 4 4
+V 0 0 0.1 0.1
+V 1 0 0.1 0.1
+V 1 1 0.1 0.1
+V 0 1 0.1 0.1
+E 0 1
+E 1 2
+E 2 3
+E 3 0

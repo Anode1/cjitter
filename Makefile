@@ -48,10 +48,11 @@ c/%.o: c/%.c $(HEADERS)
 
 examples: labels erd station
 
-# The profile: the directional test over every corpus and every declared energy, as the
-# README's table. Deterministic, about two minutes, not part of check.
+# The profile: the directional test over every corpus, every control and every declared
+# energy, with bootstrap intervals, as the README's table. Deterministic, about five
+# minutes, not part of check.
 profile: station
-	python3 example/diagrams/profile.py --md
+	python3 example/diagrams/profile.py --md --ci
 
 # The sixty-draws pilot: exploratory, unpinned, the instrument for QUESTIONS item 8.
 sixty: example/sixty/sixty.c $(OBJ) $(HEADERS)

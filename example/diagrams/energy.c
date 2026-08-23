@@ -63,26 +63,35 @@ static double t_overlap(const graph *g, const double *x)
     return area > 0 ? ov / area : 0;
 }
 
-static double t_length(const graph *g, const double *x)
+double ref_length(int k, const graph *g, const energy_spec *e)
+{
+    switch (e->lref) {
+    case L_MEDIAN: return g->L_median;
+    case L_RSQRT:  return 1.0 / sqrt((double)g->n);
+    default:       return k == TERM_S ? g->L_stress : g->L_len;
+    }
+}
+
+static double t_length(const graph *g, const double *x, const energy_spec *e)
 {
     long i;
-    double s = 0;
+    double s = 0, L = ref_length(TERM_L, g, e);
     for (i = 0; i < g->m; i++) {
         double dx = x[2 * g->ea[i]] - x[2 * g->eb[i]], dy = x[2 * g->ea[i] + 1] - x[2 * g->eb[i] + 1];
-        double r = (sqrt(dx * dx + dy * dy) - g->L) / g->L;
+        double r = (sqrt(dx * dx + dy * dy) - L) / L;
         s += r * r;
     }
     return s / (double)g->m;
 }
 
-static double t_stress(const graph *g, const double *x)
+static double t_stress(const graph *g, const double *x, const energy_spec *e)
 {
     long i, j, pairs = 0;
-    double s = 0;
+    double s = 0, L = ref_length(TERM_S, g, e);
     for (i = 0; i < g->n; i++)
         for (j = i + 1; j < g->n; j++) {
             double dx = x[2 * i] - x[2 * j], dy = x[2 * i + 1] - x[2 * j + 1];
-            double ideal = g->L * (double)g->dist[i * g->n + j];
+            double ideal = L * (double)g->dist[i * g->n + j];
             double r = (sqrt(dx * dx + dy * dy) - ideal) / ideal;
             s += r * r;
             pairs++;
@@ -162,8 +171,8 @@ double term_value(int k, const graph *g, const double *x, const energy_spec *e)
     switch (k) {
     case TERM_C: return t_crossings(g, x);
     case TERM_O: return t_overlap(g, x);
-    case TERM_L: return t_length(g, x);
-    case TERM_S: return t_stress(g, x);
+    case TERM_L: return t_length(g, x, e);
+    case TERM_S: return t_stress(g, x, e);
     case TERM_R: return t_orth(g, x);
     case TERM_A: return t_align(g, x, e);
     case TERM_N: return t_nedge(g, x);

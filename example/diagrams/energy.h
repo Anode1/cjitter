@@ -10,7 +10,7 @@
  *
  *   C crossings     pairs of edges sharing no endpoint that cross, over m
  *   O overlap       total overlap area of the boxes, over total box area
- *   L length        mean over edges of ((len - L) / L)^2, L the layout's reference length
+ *   L length        mean over edges of ((len - L) / L)^2, L the reference length (length_ref)
  *   S stress        mean over node pairs of ((dist - L d_ij) / (L d_ij))^2, d_ij graph distance
  *   R orthogonality mean over edges of min(|dx|, |dy|) / (|dx| + |dy|)
  *   A alignment     one of four definitions, chosen at run time; see align_def
@@ -34,6 +34,14 @@ extern const char  term_letter[NTERMS + 1];   /* "COLSRAN" */
  *     row or a column, within tol, with at least two other nodes. */
 typedef enum { ALIGN_A1 = 1, ALIGN_A2 = 2, ALIGN_A3 = 3, ALIGN_GRID = 4 } align_def;
 
+/* The reference length L of the length and stress terms, fixed from the layout as loaded so
+ * the term cannot follow a move. FIT: the L at which the term is least for that layout,
+ * sum(l^2) / sum(l) over edges for length and the same over r / d_ij for stress; a layout at
+ * a true minimum of the term is then held, which the median cannot promise (a converged
+ * stress layout under the median scores q near 0.1, under the fit 1.00). MEDIAN: the median
+ * edge length, the upper one at even m. RSQRT: 1 / sqrt(n), fixed by the node count alone. */
+typedef enum { L_FIT = 0, L_MEDIAN = 1, L_RSQRT = 2 } length_ref;
+
 typedef struct {
     char    id[128];
     long    n, m;
@@ -41,15 +49,20 @@ typedef struct {
     double *w, *h;  /* n, same scale */
     long   *ea, *eb;/* m, endpoints, ea < eb */
     int    *dist;   /* n*n graph distances (hops); the corpus is connected components */
-    double  L;      /* reference length: the median edge length of the layout as loaded */
+    double  scale;  /* the raw extent the layout was divided by; w * scale is the raw width */
+    double  L_median, L_len, L_stress;  /* the reference-length candidates, see length_ref */
 } graph;
 
 typedef struct {
     double    w[NTERMS];
     align_def align;
+    length_ref lref;
     double    s;    /* A3 kernel width, as a fraction of the drawing width */
     double    tol;  /* GRID tolerance, same units */
 } energy_spec;
+
+/* The reference length the length (K = TERM_L) or stress (TERM_S) term reads under E. */
+double ref_length(int k, const graph *g, const energy_spec *e);
 
 /* One term. K is TERM_*. */
 double term_value(int k, const graph *g, const double *x, const energy_spec *e);
