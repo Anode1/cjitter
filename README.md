@@ -69,7 +69,7 @@ best method on the problem. Both halves of that story are the library working as
 - **Byte reproducibility across platforms.** Trajectories use integer arithmetic, `+ - *`,
   `fabs` and `sqrt`, and nothing else from libm, so a run reproduces from its seed on any
   compiler and architecture, and the test suite pins every number in these documents.
-- **An honest number when the objective is noisy.** The smallest value a search observes is
+- **The number a noisy objective can stand behind.** The smallest value a search observes is
   the luckiest draw it took, and how much luck that carries differs by method. Set `verify`
   in the tuning and the result carries `verified`, the mean of that many fresh evaluations
   of the returned point, with `inflation` the gap; `cjitter_compare` then judges on it.
