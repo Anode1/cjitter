@@ -79,7 +79,7 @@ best method on the problem. Both halves of that story are the library working as
   names its tuning. `block`, the number of variables one proposal moves, is the field worth
   knowing first: on objectives that are sums over weakly interacting objects it can be worth
   an order of magnitude in budget, and it is the mechanism the library is named after.
-- **Two source files, C99, no dependencies.** It builds anywhere and audits in an afternoon.
+- **Two source files, C99, no dependencies.** It builds anywhere.
 
 The fit is any problem whose objective is cheap enough to call thousands of times over tens
 to a few hundred variables, with no gradient on offer:
