@@ -117,11 +117,13 @@ table per proposal:
 the measured tables, the calibration lines, and what the block does to each method.
 
 **`example/diagrams/`** turns the instrument around. Instead of descending an energy to
-place objects, it starts from where a person placed them, 700 hand-drawn pathway and process
+place objects, it starts from where a person placed them, 853 hand-drawn pathway and process
 diagrams, and asks of each aesthetic criterion whether any small move of any box would lower
-it. People draw at a minimum of overlap and crossings and nowhere near one of uniform edge
-length or stress; a tool's layout of the same graphs is the reverse.
-[example/diagrams/README.md](example/diagrams/README.md) has the table.
+it. People draw at a minimum of overlap and nowhere near one of uniform edge length or
+stress; what holds their boxes and the standard energy omits is alignment.
+[example/diagrams/README.md](example/diagrams/README.md) has the table; the paper, *What Do
+People Optimize in Graph Layout?*, is
+[articles/cjitter](https://github.com/Anode1/articles/tree/stationarity-direction/cjitter).
 
 ## Build and test
 
