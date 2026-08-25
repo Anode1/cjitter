@@ -41,6 +41,7 @@ coco-experiment GitHub releases, unpack as `coco/cocoex-c`):
        $CJITTER/example/metaphors/uniform.c coco/cocoex-c/coco.c $CJITTER/libcjitter.a -lm
     ./uniform > uniform_control.csv
     ./audit fb_algs.txt fb_flat.txt --control-csv uniform_control.csv
+    python3 trend_fig.py summary.txt > trend.tex   # the paper's budget-trend figure
 
 The uniform run is 444 million function evaluations, about 13 minutes, deterministic
 from the seed rule declared in `uniform.c`. Only 121 of 7,104 verdicts differ between
