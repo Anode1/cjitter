@@ -421,20 +421,29 @@ static int cmpd(const void *a, const void *b)
 }
 
 /* The chance of at least W wins in N tries of a fair coin: the exact one-sided sign test.
- * N is a seed count, so the binomial sum in doubles is exact to far more digits than the
- * three that get printed. Public since 0.13.0: a caller pooling instances needs the test the
- * table used, not one they wrote again. */
+ * Public since 0.13.0: a caller pooling instances needs the test the table used, not one
+ * they wrote again.
+ *
+ * A pooled panel can be thousands of pairs, and the plain sum cannot go there: C(n, k)
+ * overflows a double past n = 1028 and 2^-n underflows past n = 1074, which returned NaN on
+ * a 1200-pair panel. So the tail is summed from its small end, k = n down to w, with the
+ * term and the sum renormalised by an exact power of two whenever either passes 2^512. The
+ * only rounding is the term recurrence itself, every operation is + * / on doubles in a
+ * fixed order, and a probability below the smallest double comes back 0. */
 double cjitter_sign_p(long w, long n)
 {
-    double c = 1.0, half = 1.0, sum = 0.0;
-    long k;
-    if (n < 1) return 1.0;
-    for (k = 0; k < n; k++) half *= 0.5;
-    for (k = 0; k <= n; k++) {
-        if (k >= w) sum += c * half;
-        c = c * (double)(n - k) / (double)(k + 1);
+    double m = 1.0, s = 0.0;    /* C(n, k) and the tail sum, both carrying scale 2^e */
+    long e = 0, k;
+    if (n < 1 || w <= 0) return 1.0;
+    if (w > n) return 0.0;
+    for (k = n; k >= w; k--) {
+        s += m;
+        if (k > w) m = m * (double)k / (double)(n - k + 1);
+        while (m >= 0x1p512 || s >= 0x1p512) { m *= 0x1p-512; s *= 0x1p-512; e += 512; }
     }
-    return sum < 1 ? sum : 1;
+    for (e -= n; e <= -512; e += 512) s *= 0x1p-512;
+    while (e < 0 && s > 0.0) { s *= 0.5; e++; }
+    return s < 1 ? s : 1;
 }
 
 /* Holm's step-down correction over a declared family, monotone by construction: the smallest

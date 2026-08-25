@@ -790,6 +790,33 @@ int main(void)
               "holm: an empty family and a NULL vector are refused");
     }
 
+    /* sign_p on pooled panels, where the plain binomial sum cannot go: C(n, k) overflows a
+     * double past n = 1028 and 2^-n underflows past n = 1074. References are the exact
+     * rational sums, computed outside and rounded to the nearest double; the scaled sum
+     * rounds once per recurrence step, so the pin allows a relative 1e-12. */
+    {
+        double p650 = cjitter_sign_p(650, 1200);
+        double p551 = cjitter_sign_p(551, 1200);
+        double lo = 1.0, ref;
+        int i;
+        CHECK(fabs(p650 - 2.12282007733476412e-3) <= 1e-12 * 2.12282007733476412e-3,
+              "sign_p: 650 of 1200 matches the exact rational sum");
+        CHECK(fabs(cjitter_sign_p(700, 1200) - 4.26768304051716716e-9) <= 1e-12 * 4.3e-9,
+              "sign_p: 700 of 1200 matches the exact rational sum");
+        CHECK(fabs(p650 + p551 - 1.0) <= 1e-12,
+              "sign_p: at least 650 heads and at most 649 are complementary");
+        CHECK(cjitter_sign_p(651, 1200) < p650,
+              "sign_p: one more required win can only lower the tail");
+        for (ref = 1.0, i = 0; i < 1029; i++) ref *= 0.5;
+        CHECK(cjitter_sign_p(1029, 1029) == ref,
+              "sign_p: a clean sweep of 1029 is exactly 2^-1029, in the subnormal range");
+        CHECK(cjitter_sign_p(2000, 2000) == 0.0,
+              "sign_p: a tail below the smallest double is 0, not NaN");
+        for (i = 0; i < 1200; i++) lo *= 0.5;
+        CHECK(cjitter_sign_p(1200, 1200) == 0.0 && lo == 0.0,
+              "sign_p: 2^-1200 itself is below the smallest double, so 0 is the rounding");
+    }
+
     /* compare_raw: the panel's numbers without the table. Every row must be the run it stands
      * for, seed for seed and point for point, or a study computing its own estimand from
      * these is not looking at the runs compare judged. */

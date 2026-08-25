@@ -254,8 +254,9 @@ int cjitter_compare_raw(const cjitter_problem *p, const cjitter_budget *b,
  * instances needs the same tests the table used.
  *
  * cjitter_sign_p is the exact one-sided sign test: the chance a fair coin gives at least WINS
- * heads in N tries. N is a count, so the binomial sum in doubles is exact far past the digits
- * compare prints. It returns 1 when N is 0 or WINS is 0 or fewer, and never more than 1.
+ * heads in N tries. The sum is carried with an exact power-of-two scale, so N may be a seed
+ * panel or a pooled panel of any size; a probability below the smallest positive double comes
+ * back 0. It returns 1 when N is 0 or WINS is 0 or fewer, and never more than 1.
  *
  * cjitter_holm applies Holm's step-down correction to the K probabilities in P and writes K
  * values to ADJ, in P's order, each at most 1 and monotone in P by construction. ADJ must not
