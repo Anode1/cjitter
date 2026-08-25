@@ -3,9 +3,24 @@
 Laying out a diagram with the fewest edge crossings is NP-complete (Garey and Johnson,
 *Crossing Number is NP-Complete*, SIAM J. Algebraic Discrete Methods 4:312-316, 1983), so
 there is no polynomial-time exact algorithm unless P = NP, and every drawing tool runs
-heuristics. MySQL Workbench's heuristics do it badly, every reverse-engineering of the
-schema scrambles the positions, and restoring this 44-table diagram by hand after each one
-cost the author about an hour. That recurring hour is the problem this example solves.
+heuristics. MySQL Workbench offers one unparameterised command for it, `Arrange > Autolayout`,
+documented in full as "Automatically arranges objects on the canvas": no scope, no options,
+no way to hold a table where it is. Oracle SQL Developer Data Modeler offers the same one
+button, whose documented remedy for a bad result is Undo. Neither states what becomes of
+hand-placed positions when the model is refreshed from the database, and Workbench's
+reverse-engineering builds a *new* auto-placed diagram rather than merging into yours.
+Restoring this 44-table diagram by hand cost the author about an hour each time. That
+recurring hour is the problem this example solves.
+
+Freezing a subset and optimising the rest is not new and this example does not claim it.
+It is Brandes and Wagner's stability term (GD 1997), written out by Brandes and Mader as
+`(1-a) * stress + a * sum_i phi_i * |p_i - p_i0|^2`, of which a hard freeze is the
+`phi_i -> infinity` limit; Frishman and Tal named the step "pinning weight" in 2007. It
+ships as `pin=true` in Graphviz neato, `org.eclipse.elk.stress.fixed` in ELK, `fixed=` in
+NetworkX, `fx`/`fy` in d3-force, `respectFixedPosition` in draw.io, and `PartialLayouter`
+in yFiles. What none of them models is the routed edge: they minimise straight-line stress,
+while an ERD draws orthogonal polylines with waypoints, which is what this objective scores
+and what `data/*_chords.txt` measures the difference of.
 
 The graph is real: an anonymized production schema, 44 tables and the 59 foreign-key edges on
 its diagram (`data/`, provenance and anonymization in `data/PROVENANCE.md`). The last
