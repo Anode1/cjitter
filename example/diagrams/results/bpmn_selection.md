@@ -5,10 +5,10 @@ cannot tell a selection from a sample, so this measures the difference.
 
 ## The funnel reproduces
 
-`bpmai.tar.gz` holds 29,810 models. `parsers/parse_bpmn.py` keeps 18,308 with at least ten
-nodes and one edge; `data/make_corpus.py --bpmn` takes the largest component of 15 to 40
-nodes whose every edge is a BPMN flow or association and reports **6,723 graphs in the
-band**, the recorded figure. Sorting those by file name and taking the first 300 reproduces
+`bpmai.tar.gz` holds 29,810 models. `parsers/parse_bpmn.py` keeps 21,784 with at least ten
+nodes and one edge; `data/make_corpus.py --bpmn` keeps the 13,435 whose every edge is a
+BPMN flow or association, takes the largest component of 15 to 40 nodes, and reports
+**6,723 graphs in the band**, the recorded figure. Sorting those by file name and taking the first 300 reproduces
 the committed `data/bpmn.txt` byte for byte.
 
 ## What the selection moves
