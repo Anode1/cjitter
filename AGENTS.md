@@ -98,6 +98,12 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
                         neato, and the hand-computable fixture), pilot/ (the superseded
                         exploratory run, kept with its defects declared). The pre-registration
                         it answers is in the articles repository, ~/articles/cjitter.
+    example/metaphors/  the paired audit of the GECCO 2024 metaphor benchmark from its own
+                        Zenodo release: condense.py and export_flat.py (their csv to a flat
+                        table), audit.c (pairs, sign test, Holm, every verdict), uniform.c
+                        (the true uniform control through coco-experiment). Machinery only;
+                        the data, the pre-registration and the paper are in
+                        ~/articles/cjitter, data under its metaphors/ (gitignored there).
     tests/tests.c       unit suite: refusals, the exact budget, determinism, box and repair
     tests/cli.sh        black-box: exit codes, refusal messages, runs byte-identical over reruns
     tests/diagrams.sh   black-box for station: the fixture's terms by hand, the directional

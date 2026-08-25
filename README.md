@@ -44,7 +44,10 @@ says nothing about equality.
 The same panel is available as numbers rather than a table. `cjitter_compare_raw` hands back
 the score and the returned point of every run, `cjitter_compare_masked` runs only the methods
 a mask names, and `cjitter_sign_p` and `cjitter_holm` are the two tests the verdict column is
-made of, so a study pooling many instances uses them rather than writing them again.
+made of, so a study pooling many instances uses them rather than writing them again. The sign
+test carries its sum with an exact power-of-two scale, so a pooled panel of thousands of
+pairs is as safe as a seed panel of seven; [example/metaphors](example/metaphors/README.md)
+is such a study, 1200 pairs per cell over another benchmark's million runs.
 
 On the label problem, at 36% area coverage:
 
@@ -124,6 +127,15 @@ stress; what holds their boxes and the standard energy omits is alignment.
 [example/diagrams/README.md](example/diagrams/README.md) has the table; the paper, *What Do
 People Optimize in Graph Layout?*, is
 [articles/cjitter](https://github.com/Anode1/articles/tree/stationarity-direction/cjitter).
+
+**`example/metaphors/`** points the two verdict tests at somebody else's benchmark: the
+1.4-million-run GECCO 2024 study of the metaphor optimization libraries, which ranked 296
+implementations and computed no statistical test. Paired with random search per function,
+instance and repetition from the benchmark's own released data, 66 to 98 implementations
+per dimension are not shown better than uniform sampling at the top budget, most of them
+strictly worse, and the count worse than random grows with budget. The audit is
+pre-registered, and its whole verdict table is one 20-second program run.
+[example/metaphors/README.md](example/metaphors/README.md) has the pipeline.
 
 ## Build and test
 
