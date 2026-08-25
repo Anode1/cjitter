@@ -228,3 +228,32 @@ for name, ref in (("their RandomSearch", rref_top), ("uniform", uref)):
             lo = min(lo, cnt[i][0])
             hi = max(hi, cnt[i][0])
     print(f"  vs {name}: wins {lo} to {hi} of 1200")
+
+print("\nI. the robust set (needs verdicts_uniform.tsv beside the data):")
+try:
+    from collections import defaultdict
+    cells = defaultdict(list)
+    for r in csv.DictReader(open("verdicts_uniform.tsv"), delimiter="\t"):
+        if r["lib"] == "Baselines" or int(r["budget_factor"]) == 10:
+            continue
+        cells[(r["lib"], r["alg"])].append(r["verdict"])
+    allb = sorted(k for k, v in cells.items() if len(v) == 24 and all(x == "better" for x in v))
+    nw = sum(1 for v in cells.values() if all(x != "worse" for x in v))
+    print(f"  shown better in all 24 cells: {len(allb)} of {len(cells)}; "
+          f"never shown worse anywhere: {nw}")
+    with open("robust_set.txt", "w") as f:
+        for l, a in allb:
+            f.write(f"{l}\t{a}\n")
+    print("\nJ. per-library at the top budget (4 dimension cells per implementation):")
+    st = defaultdict(lambda: [0, 0, 0])
+    for r in csv.DictReader(open("verdicts_uniform.tsv"), delimiter="\t"):
+        if r["lib"] == "Baselines" or int(r["budget_factor"]) != 10000:
+            continue
+        i = {"better": 0, "not shown": 1, "worse": 2}.get(r["verdict"])
+        if i is not None:
+            st[r["lib"]][i] += 1
+    for l, (b, ns, w) in sorted(st.items()):
+        n = b + ns + w
+        print(f"  {l:11s} better {b}/{n} ({100*b/n:.0f}%)  not-shown {ns}  worse {w} ({100*w/n:.0f}%)")
+except FileNotFoundError:
+    print("  verdicts_uniform.tsv not present, skipped")
