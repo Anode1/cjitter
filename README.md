@@ -125,8 +125,8 @@ diagrams, and asks of each aesthetic criterion whether any small move of any box
 it. People draw at a minimum of overlap and nowhere near one of uniform edge length or
 stress; what holds their boxes and the standard energy omits is alignment.
 [example/diagrams/README.md](example/diagrams/README.md) has the table; the paper, *What Do
-People Optimize in Graph Layout?*, is
-[articles/cjitter](https://github.com/Anode1/articles/tree/stationarity-direction/cjitter).
+People Optimize in Diagram Layout?*, is
+[articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
 
 **`example/metaphors/`** points the two verdict tests at somebody else's benchmark: the
 1.4-million-run GECCO 2024 study of the metaphor optimization libraries, which ranked 296

@@ -16,9 +16,10 @@ of those are shown strictly worse. The count worse than random is lowest at midd
 budgets and rises to the top budget in every dimension: a search that stalls loses to
 a control that keeps sampling. The same algorithm name carries opposite verdicts
 across libraries, differential evolution included, so the verdict attaches to the
-implementation, never to the metaphor. The paper and its pre-registration are in the
-articles repository beside this one; the audit was frozen there before the
-confirmatory numbers were computed.
+implementation, never to the metaphor. The paper, *The Test the Metaphor Benchmark
+Never Ran*, and its pre-registration are
+[articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter); the audit
+was frozen there before the confirmatory numbers were computed.
 
 This directory is the machinery, not the data. The pipeline, run from a working
 directory holding the Zenodo files:

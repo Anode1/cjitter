@@ -3,8 +3,8 @@
 **A hand layout is held by overlap, by nothing that prices distance, and by alignment for
 0.52, 0.21 and 0.91 of its boxes by corpus; of four tools laid out on the same graphs, the
 layered ones match that profile on every criterion but alignment and flow, where they are
-exact.** The paper that reads these tables, *What Do People Optimize in Graph Layout?*, is
-[articles/cjitter](https://github.com/Anode1/articles/tree/stationarity-direction/cjitter).
+exact.** The paper that reads these tables, *What Do People Optimize in Diagram Layout?*, is
+[articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
 
 A layout tool places the boxes of a diagram by minimising a weighted sum of criteria. If
 people drew the same way, a layout a person accepted would be a local minimum of every

@@ -1,1 +1,11 @@
+# Run output: regenerate with run_all.sh, versions and seeds in manifest.txt.
 *.diffs
+*.err
+*.log
+__pycache__/
+cells/
+desc/
+fit/
+profiles_done
+tests/done
+bpmn_hand_A1_nodes.csv
