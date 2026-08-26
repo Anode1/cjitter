@@ -54,10 +54,6 @@ examples: labels erd station
 profile: station
 	python3 example/diagrams/profile.py --md --ci
 
-# The sixty-draws pilot: exploratory, unpinned, the instrument for QUESTIONS item 8.
-sixty: example/sixty/sixty.c $(OBJ) $(HEADERS)
-	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ example/sixty/sixty.c $(OBJ) $(LIBM) $(LDLIBS)
-
 # The search watched: climb settling the migration's tables into the frozen diagram, a
 # smoothed replay of its improvements. The README's moving figure. Not part of check: it
 # needs rsvg-convert and ImageMagick, and its output is a committed fixture.
@@ -125,7 +121,7 @@ ut-ubsan: $(HEADERS)
 # target only enforced its claim on whoever read the scrollback.
 pedantic: $(HEADERS)
 	@rc=0; tmp=`mktemp -d`; \
-	for f in $(SRC) tests/tests.c example/labels/labels.c example/erd/erd.c example/erd/erd_movie.c example/sixty/sixty.c $(DIAG_SRC); do \
+	for f in $(SRC) tests/tests.c example/labels/labels.c example/erd/erd.c example/erd/erd_movie.c $(DIAG_SRC); do \
 	    $(CC) $(PROJ) -pedantic -Wextra -Werror -O2 -c "$$f" -o "$$tmp/p.o" || rc=1; \
 	done; \
 	rm -rf "$$tmp"; \

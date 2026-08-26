@@ -80,12 +80,6 @@ a run stops reproducing the moment anyone builds with `-march=native` or on arm6
                     command-line argument could reach; its bpnn ancestor once understated a
                     study's standard error by 2.5x the same way.
     example/labels/     rectangles in a container, minimum overlap
-    example/sixty/      the sixty-draws question (QUESTIONS.md item 8 next door): what n
-                        uniform draws actually buy per landscape, and the n at which each
-                        method matches random's n = 59. Exploratory instrument, output
-                        unpinned; confirmatory runs wait for a signed pre-registration.
-                        Phase two wires the smbpann engine (a ~/bpnn checkout) in as the
-                        constant-optimization landscape.
     example/erd/erd.c   tables added by a migration onto a frozen diagram, the experiment
                         run under both edge models (one style boolean); --svg draws it;
                         README.md there carries the walkthrough and the measured tables
