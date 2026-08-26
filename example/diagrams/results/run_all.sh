@@ -1,6 +1,7 @@
 #!/bin/sh
-# Every measurement the paper reads, after the corpora are regenerated. Run from ~/cjitter.
-S=/home/vas/cjitter/example/diagrams/results
+# Every measurement the paper reads, after the corpora are regenerated. Run from the
+# repository root: ./station and .venv/ are looked up there.
+S=$(cd "$(dirname "$0")" && pwd)
 P=example/diagrams/profile.py
 D=example/diagrams/data
 mkdir -p $S/cells $S/desc $S/fit

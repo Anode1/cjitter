@@ -1,8 +1,8 @@
 #!/bin/sh
 # The paired tests: per corpus and tool control, hand q against the control's q over the
 # single terms, one Holm family per (corpus, control). Reads cells/, writes tests/.
-S=/home/vas/cjitter/example/diagrams/results
-A=/home/vas/cjitter/example/diagrams/analyse.py
+S=$(cd "$(dirname "$0")" && pwd)
+A=$S/../analyse.py
 mkdir -p $S/tests
 TERMS="crossings_alone overlap_alone length_alone stress_alone orthogonality_alone alignment_A1_alone alignment_A3_alone gridiness_alone node-edge_alone flow_alone"
 for c in hs sbgn bpmn; do
