@@ -1,7 +1,8 @@
 Run manifest, battery of 2026-08-23 (run_all.sh started 09:31 EDT, done by 12:00;
 tests.sh, lanes.py and sparsity.py the same day).
 
-repository        github.com/Anode1/cjitter, branch holm-and-macro-guards
+repository        github.com/Anode1/cjitter, branch master (the run was made on
+                  holm-and-macro-guards, merged since and deleted)
 commit            1987633 (the machinery of the run; the analysis scripts added after join
                   the next commit, no measurement code changed between them)
 platform          Ubuntu 24.04.4 LTS, Linux 6.8.0-104-generic, x86_64
