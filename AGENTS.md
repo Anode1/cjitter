@@ -185,7 +185,7 @@ deterministic fitness has to be exact. And the field belongs in the tuning, not 
 field by field, so a field added to the budget is uninitialised garbage in every caller that
 already exists. The cli suite caught that one within a minute of the first build.
 
-This is the prerequisite for QUESTIONS.md item 1 next door. A sweep for the noise level at
+This is the prerequisite for the noise-resolution question. A sweep for the noise level at
 which search stops beating random, run through an estimator whose bias is created by that same
 noise, would have measured its own artifact.
 
@@ -309,8 +309,8 @@ is why a visible defect survived every gate, four reviews and a paper.
    are thirty years of graph drawing and are the control for that case, exactly as uniform sampling
    is the control here.
 
-7. **`example/noise/`, and the join to `~/articles/bpnn/resolution.tex`.** This is QUESTIONS.md
-   item 1 next door, and `verify` was the prerequisite: a sweep for the noise level at which
+7. **`example/noise/`, and the join to `~/articles/bpnn/resolution.tex`.** This is the
+   noise-resolution question, and `verify` was the prerequisite: a sweep for the noise level at which
    search stops beating random, run through an estimator biased by that same noise, measures its
    own artifact. Parameterise the family by the single dimensionless ratio **r = sigma_W /
    sigma_B**, not by a raw sigma, because that is exactly what resolution.tex measured across 92
@@ -335,8 +335,8 @@ is why a visible defect survived every gate, four reviews and a paper.
 9. **`B*` as an entry point.** The separation budget, the smallest budget at which a method
    sweeps the control on the seed panel, is already defined, already used in the paper, and lives
    in `articles/cjitter/data/analysis.py`. It is the quantity an engineer actually has a question
-   about. Making it a library call is what turns QUESTIONS.md item 2, a field guide by separation
-   budget across problem families, from a project into a loop.
+   about. Making it a library call is what turns a field guide by separation budget across
+   problem families from a project into a loop.
 
 10. **A caller-supplied RNG stream.** Concrete blocker, not theory. `~/smbpann` accepts a change
     only when it reproduces archived per-seed output bit for bit, and its `validation/paper2/ga.h`
