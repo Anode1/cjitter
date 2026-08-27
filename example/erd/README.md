@@ -135,10 +135,37 @@ open problem, not the search's. Connectors leave a table's border at that edge's
 attachment point, spread by the table's degree, so no two connectors ever share a segment:
 an edge joins two tables and nothing else.
 
+## What the human row is worth
+
+Scoring a search against the maintainer assumes the maintainer's own placement is
+distinguishable from a random draw. On this diagram it is not. `data/null_check.py` redraws
+the same ten tables uniformly in the canvas box 2,000 times and reports where the maintainer
+sits in the resulting null. P is the fraction of draws scoring at least as well, so 0.5 is
+no signal and a small P is signal.
+
+    criterion                                maintainer   random med        P
+    aligned to frozen lines, tol 5                   12           14    0.915
+    exact ties, tol 1                                 4            4    0.690
+    mutual alignment among the ten, tol 5             0            0    1.000
+    alignment to FK neighbours, tol 5                 1            0    0.174
+    rms spread from own centroid                    864        871.3    0.478
+    box overlap area                                  0    6.969e+04    0.000
+
+Only overlap separates the two, and the search hands its own control that same property
+through the repair callback. With 34 frozen tables there are about 100 candidate alignment
+lines on each axis of a 2,889 by 1,916 canvas, so the base rate swamps whatever the ten
+could contribute: a random draw sits on 14 of the 20 axes where the maintainer sits on 12.
+Seeds 2 and 3 give 0.918 and 0.908 on that row.
+
+The human row therefore calibrates the edge model and does nothing else. This diagram is not
+a standard an objective can be scored against, and the alignment term that holds hand-drawn
+layouts across the corpora in `example/diagrams` does not rank this maintainer above random
+either. The example demonstrates the library on a real graph; it is not a benchmark.
+
 Each section ends with the layout one run at seed 1 found and its feasibility under that
 model, pinned digit for digit by `tests/cli.sh`. `./erd --svg > erd.svg` draws four states
 stacked with their actual routes: the scramble a reverse-engineering leaves (the state that
-used to cost the hour), the centroid initial, the search's final, and the human's reference,
+used to cost the hour), the centroid initial, the search's final, and the human's own placement,
 the frozen 34 identical in the last three. `--svg-straight` draws the same four with straight
 edges.
 
@@ -149,7 +176,8 @@ that shipped infeasible layouts for a year, are collected in
 ## The data, and the .mwb format
 
 The graph is carried as data (`data/`): an anonymized `.mwb`, both revisions rendered to PNG,
-and the extracted geometry as JSON. A C reader for `.mwb` files is not written. The format is
+and the extracted geometry as JSON. `null_check.py` is the null above; `gen_data.py`
+extracted the geometry and `render.py` draws the PNGs. A C reader for `.mwb` files is not written. The format is
 a zip around `document.mwb.xml`; the figure positions live in `workbench.physical.TableFigure`
 objects (the attribute order is `type="real" key="left"`, which matters when grepping),
 foreign keys in `db.mysql.ForeignKey` objects whose `owner` link names the child table.

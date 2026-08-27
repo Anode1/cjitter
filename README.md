@@ -109,15 +109,18 @@ callback, and `cjitter.h` says why that is not a penalty term.
 
 **`example/erd/`** is the application this library was written for: tables added by a
 database migration, placed onto a frozen diagram whose other 34 tables a person already knows.
-The graph is a real anonymized production schema, the objective routes every connector
-orthogonally before reading it, and the run prints how well that router reproduces the one
-layout whose on-screen quality is certain. The film is climb settling the migration, one
+The graph is a real anonymized production schema, and the objective routes every connector
+orthogonally before reading it, which is what none of the published pinning implementations
+do. A 2,000-draw null in that directory shows the maintainer's own placement separable from
+a random draw by nothing but not overlapping, so this demonstrates the library on a real
+graph and is not a benchmark for an objective. The film is climb settling the migration, one
 table per proposal:
 
 ![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
 
 [example/erd/README.md](example/erd/README.md) has the full walkthrough: both edge models,
-the measured tables, the calibration lines, and what the block does to each method.
+the measured tables, the calibration lines, the null, and what the block does to each
+method.
 
 **`example/diagrams/`** turns the instrument around. Instead of descending an energy to
 place objects, it starts from where a person placed them, 853 hand-drawn pathway and process
