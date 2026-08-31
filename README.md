@@ -127,8 +127,8 @@ place objects, it starts from where a person placed them, 853 hand-drawn pathway
 diagrams, and asks of each aesthetic criterion whether any small move of any box would lower
 it. People draw at a minimum of overlap and nowhere near one of uniform edge length or
 stress; what holds their boxes and the standard energy omits is alignment.
-[example/diagrams/README.md](example/diagrams/README.md) has the table; the paper, *What Do
-People Optimize in Diagram Layout?*, is
+[example/diagrams/README.md](example/diagrams/README.md) has the table; the paper, *What
+Holds a Hand-Drawn Diagram?*, is
 [articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
 
 **`example/metaphors/`** points the two verdict tests at somebody else's benchmark: the
