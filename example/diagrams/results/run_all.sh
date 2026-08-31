@@ -34,3 +34,4 @@ done
 echo DESC_DONE > $S/desc/done
 
 .venv/bin/python3 example/diagrams/results/robustness.py
+.venv/bin/python3 example/diagrams/results/dedup.py > example/diagrams/results/dedup.err 2>&1
