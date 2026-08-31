@@ -28,3 +28,5 @@ for c in hs sbgn bpmn; do
   done
 done
 echo DESC_DONE > $S/desc/done
+
+.venv/bin/python3 example/diagrams/results/robustness.py
