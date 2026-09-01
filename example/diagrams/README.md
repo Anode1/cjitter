@@ -132,7 +132,12 @@ alignment and flow the hand column reads as dot's column does.
     parsers/             GPML, SBGN-ML and Signavio JSON to JSON with routes and directions;
                          check_against_pilot.py proves the node and edge sets unchanged
     parsed/              the parsers' JSON for the diagrams in the band
-    data/make_corpus.py  JSON to text corpora, the component taken here; --tool, --chords
+    data/make_corpus.py  JSON to text corpora, the component taken here; --tool, --chords,
+                         --band
+    data/dot2corpus.py   any dot file with positions to the corpus format, so the test
+                         runs on your own layout:
+                           python3 data/dot2corpus.py drawing.gv my.txt
+                           ./station direct --corpus my.txt --weights 0,0,0,0,0,1,0,0 --align a1
     data/elk_layout.py   the ELK control, through elkjs under a local node
     data/*.txt           the corpora, their controls, their chord variants; fixture.txt
     results/run_all.sh   every measurement the paper reads, into results/; tests.sh the
