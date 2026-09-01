@@ -1,7 +1,7 @@
 # diagrams: which aesthetic criteria hold a hand-drawn layout
 
 **A hand layout is held by overlap, by nothing that prices distance, and by alignment for
-0.52, 0.21 and 0.91 of its boxes by corpus; of four tools laid out on the same graphs, the
+0.52, 0.21 and 0.91 of its boxes by corpus (0.87 over the full BPMN population); of four tools laid out on the same graphs, the
 layered ones match that profile on every criterion but alignment and flow, where they are
 exact.** The paper that reads these tables, *What Holds a Hand-Drawn Diagram?*, is
 [articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
