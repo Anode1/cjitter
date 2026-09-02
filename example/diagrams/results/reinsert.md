@@ -58,3 +58,13 @@ energy), a tolerance sweep, and clustered by diagram.
 | bpmn | tol 0.0025 | 0.114 | 0.199 | +0.085 |
 | bpmn | tol 0.01 | 0.237 | 0.273 | +0.036 |
 | bpmn | clustered gain 95% CI | | | [+0.052, +0.074] |
+
+## The rail, given the neighbourhood
+
+Rail rate stratified by whether the placement landed within 0.05 of the true
+position under both energies; the near-stratum sizes barely differ between
+energies, a further sign the neighbourhood is not alignment's doing.
+
+- hs: n = 235 near under both; C+O+L on the person's rail 0.413, C+O+L+A1 0.545; discordant 47:16, McNemar z = 3.9.
+- sbgn: n = 301 near under both; C+O+L on the person's rail 0.349, C+O+L+A1 0.455; discordant 52:20, McNemar z = 3.8.
+- bpmn: n = 568 near under both; C+O+L on the person's rail 0.532, C+O+L+A1 0.665; discordant 87:11, McNemar z = 7.7.

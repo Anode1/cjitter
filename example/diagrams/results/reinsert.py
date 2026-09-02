@@ -141,6 +141,25 @@ for corpus in ('hs', 'sbgn', 'bpmn'):
     lines.append("| %s | clustered gain 95%% CI | | | [%+.3f, %+.3f] |"
                  % (corpus, boots[25], boots[974]))
 
+lines += ["", "## The rail, given the neighbourhood", "",
+          "Rail rate stratified by whether the placement landed within 0.05 of the true",
+          "position under both energies; the near-stratum sizes barely differ between",
+          "energies, a further sign the neighbourhood is not alignment's doing.", ""]
+for corpus in ('hs', 'sbgn', 'bpmn'):
+    A, B = rows(corpus, 'COL'), rows(corpus, 'COLA1')
+    def on(r):
+        return (abs(float(r['placedx']) - float(r['truex'])) < 0.005
+                or abs(float(r['placedy']) - float(r['truey'])) < 0.005)
+    both = [(on(x), on(y)) for x, y in zip(A, B)
+            if float(x['dist']) <= 0.05 and float(y['dist']) <= 0.05]
+    gain = sum(1 for x, y in both if y and not x)
+    loss = sum(1 for x, y in both if x and not y)
+    z = (gain - loss) / math.sqrt(gain + loss) if gain + loss else 0
+    lines.append("- %s: n = %d near under both; C+O+L on the person's rail %.3f,"
+                 " C+O+L+A1 %.3f; discordant %d:%d, McNemar z = %.1f."
+                 % (corpus, len(both), sum(x for x, _ in both) / len(both),
+                    sum(y for _, y in both) / len(both), gain, loss, z))
+
 with open(os.path.join(HERE, 'reinsert.md'), 'w') as f:
     f.write("\n".join(lines) + "\n")
 print("\n".join(lines))
