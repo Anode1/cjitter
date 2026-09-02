@@ -19,6 +19,8 @@
 
 #define MAXKEY 512
 #define STEP   22.0   /* canvas units of the largest table move per film frame */
+#define MINVIS 6.0    /* canvas units below which an improvement is invisible at 640px and
+                       * merges into the next glide instead of popping in one frame */
 #define MAXF   210    /* frame budget; tweens scale down proportionally to fit. Sized for the
                        * reader, not the search: at 25 frames a second this is about eight
                        * seconds of motion, and a film nobody watches to the end shows nothing.
@@ -131,35 +133,50 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Every improvement is a keyframe; the tween count per gap is proportional to the
-     * largest single-table move in it, so a long glide gets many small steps and nothing
-     * ever teleports. If the total overruns the frame budget, every gap scales down
-     * proportionally, one frame minimum. */
+    /* Every improvement is a keyframe, except those too small to see: an improvement whose
+     * largest table move from the last kept keyframe is under MINVIS merges into the next
+     * glide, so the film's tail settles instead of stuttering, one invisible pop per tiny
+     * refinement. The tween count per kept gap is proportional to the largest single-table
+     * move in it, so a long glide gets many small steps and nothing ever teleports; if the
+     * total overruns the frame budget every gap scales down proportionally, and a visible
+     * move keeps at least two frames so it reads as motion, not as a jump. */
     {
-        static long tw[MAXKEY];
-        long total = 0;
-        for (key = 0; key + 1 < T.nkey; key++) {
+        static long tw[MAXKEY], kept[MAXKEY];
+        long total = 0, nkept = 0, gap;
+        kept[nkept++] = 0;
+        for (key = 1; key < T.nkey; key++) {
             double dmax = 0;
             for (k = 0; k < nv; k += 2) {
-                double dx = T.key[key+1][k]   - T.key[key][k];
-                double dy = T.key[key+1][k+1] - T.key[key][k+1];
+                double dx = T.key[key][k]   - T.key[kept[nkept-1]][k];
+                double dy = T.key[key][k+1] - T.key[kept[nkept-1]][k+1];
                 double d = fabs(dx) > fabs(dy) ? fabs(dx) : fabs(dy);
                 if (d > dmax) dmax = d;
             }
-            tw[key] = (long)(dmax / STEP) + 1;
-            total += tw[key];
+            if (dmax >= MINVIS || key == T.nkey - 1) kept[nkept++] = key;
+        }
+        for (gap = 0; gap + 1 < nkept; gap++) {
+            double dmax = 0;
+            for (k = 0; k < nv; k += 2) {
+                double dx = T.key[kept[gap+1]][k]   - T.key[kept[gap]][k];
+                double dy = T.key[kept[gap+1]][k+1] - T.key[kept[gap]][k+1];
+                double d = fabs(dx) > fabs(dy) ? fabs(dx) : fabs(dy);
+                if (d > dmax) dmax = d;
+            }
+            tw[gap] = (long)(dmax / STEP) + 1;
+            total += tw[gap];
         }
         if (total > MAXF)
-            for (key = 0; key + 1 < T.nkey; key++) {
-                tw[key] = tw[key] * MAXF / total;
-                if (tw[key] < 1) tw[key] = 1;
+            for (gap = 0; gap + 1 < nkept; gap++) {
+                tw[gap] = tw[gap] * MAXF / total;
+                if (tw[gap] < 2) tw[gap] = 2;
             }
-        for (key = 0; key + 1 < T.nkey; key++)
-            for (t = 0; t < tw[key]; t++) {
-                double u = (double)t / (double)tw[key];
+        for (gap = 0; gap + 1 < nkept; gap++)
+            for (t = 0; t < tw[gap]; t++) {
+                double u = (double)t / (double)tw[gap];
                 for (k = 0; k < nv; k++)
-                    v[k] = T.key[key][k] + u * (T.key[key+1][k] - T.key[key][k]);
-                frame(dir, nf++, &g, v, T.kev[key], T.ksc[key]);
+                    v[k] = T.key[kept[gap]][k]
+                         + u * (T.key[kept[gap+1]][k] - T.key[kept[gap]][k]);
+                frame(dir, nf++, &g, v, T.kev[kept[gap]], T.ksc[kept[gap]]);
             }
     }
     frame(dir, nf++, &g, T.key[T.nkey - 1], T.kev[T.nkey - 1], T.ksc[T.nkey - 1]);
