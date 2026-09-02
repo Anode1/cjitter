@@ -29,3 +29,32 @@ On the rail, within 0.005 of the person's row or column (chance about 0.02): C+O
 bpmn, C+O+L against C+O+L+A1: the alignment term lands the box closer on 3349 of 6726 non-tied nodes (0.50; sign z = -0.3).
 On the rail, within 0.005 of the person's row or column (chance about 0.02): C+O+L 0.162, C+O+A1 0.160, C+O+L+A1 0.226; the discordant pairs run 710 to 264 for the added term (McNemar z = 14.3).
 
+## Robustness
+
+The rail-rate gain of C+O+L+A1 over C+O+L under another seed, twice the
+budget, the library's matched-budget control (uniform sampling under the same
+energy), a tolerance sweep, and clustered by diagram.
+
+| corpus | variant | C+O+L | C+O+L+A1 | gain |
+| --- | --- | --- | --- | --- |
+| hs | primary | 0.085 | 0.127 | +0.042 |
+| hs | seed 2 | 0.085 | 0.128 | +0.043 |
+| hs | budget 4000 | 0.086 | 0.126 | +0.040 |
+| hs | uniform sampling | 0.055 | 0.086 | +0.030 |
+| hs | tol 0.0025 | 0.058 | 0.105 | +0.047 |
+| hs | tol 0.01 | 0.136 | 0.167 | +0.032 |
+| hs | clustered gain 95% CI | | | [+0.032, +0.052] |
+| sbgn | primary | 0.083 | 0.101 | +0.018 |
+| sbgn | seed 2 | 0.087 | 0.102 | +0.015 |
+| sbgn | budget 4000 | 0.086 | 0.102 | +0.016 |
+| sbgn | uniform sampling | 0.065 | 0.084 | +0.020 |
+| sbgn | tol 0.0025 | 0.050 | 0.062 | +0.011 |
+| sbgn | tol 0.01 | 0.139 | 0.156 | +0.017 |
+| sbgn | clustered gain 95% CI | | | [+0.010, +0.026] |
+| bpmn | primary | 0.162 | 0.226 | +0.064 |
+| bpmn | seed 2 | 0.165 | 0.224 | +0.060 |
+| bpmn | budget 4000 | 0.164 | 0.223 | +0.059 |
+| bpmn | uniform sampling | 0.101 | 0.138 | +0.036 |
+| bpmn | tol 0.0025 | 0.114 | 0.199 | +0.085 |
+| bpmn | tol 0.01 | 0.237 | 0.273 | +0.036 |
+| bpmn | clustered gain 95% CI | | | [+0.052, +0.074] |
