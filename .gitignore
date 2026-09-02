@@ -16,6 +16,7 @@ movie_frames/
 /libcjitter.a
 /erd_straight.svg
 station
+reinsert
 station_asan
 station_ubsan
 .venv/

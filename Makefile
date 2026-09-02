@@ -85,6 +85,11 @@ DIAG_HDR = example/diagrams/energy.h example/diagrams/corpus.h
 station: $(DIAG_SRC) $(DIAG_HDR) $(OBJ) $(HEADERS)
 	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ $(DIAG_SRC) $(OBJ) $(LIBM) $(LDLIBS)
 
+# reinsert: the box-reinsertion benchmark; delete one box, an energy puts it back.
+REINS_SRC = example/diagrams/energy.c example/diagrams/corpus.c example/diagrams/reinsert.c
+reinsert: $(REINS_SRC) $(DIAG_HDR) $(OBJ) $(HEADERS)
+	$(CC) $(PROJ) $(CPPFLAGS) $(CFLAGS) -o $@ $(REINS_SRC) $(OBJ) $(LIBM) $(LDLIBS)
+
 # ut: in-process unit tests of the library's contract: refusals, the exact budget, determinism,
 # the box and the repair invariant. Built from sources, not objects, so a header change rebuilds.
 ut: cjitter_ut
