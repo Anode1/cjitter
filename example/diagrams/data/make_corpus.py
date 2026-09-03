@@ -121,19 +121,20 @@ def layout(g, tool):
 
 if __name__ == '__main__':
     src, dst = sys.argv[1], sys.argv[2]
-    tools, exclude, chords, bpmn, limit = [], [], False, False, 0
+    tools, exclude, chords, bpmn, limit, lo, hi = [], [], False, False, 0, 15, 40
     args = sys.argv[3:]
     while args:
         if args[0] == '--tool' and args[1] in TOOLS: tools.append((args[1], args[2])); args = args[3:]
         elif args[0] == '--chords': chords = True; args = args[1:]
         elif args[0] == '--bpmn': bpmn = True; args = args[1:]
         elif args[0] == '--limit': limit = int(args[1]); args = args[2:]
+        elif args[0] == '--band': lo, hi = int(args[1]), int(args[2]); args = args[3:]
         elif args[0] == '--exclude': exclude = args[1:]; args = []
         else: sys.exit("unknown argument " + args[0])
-    G = load(src, 15, 40, exclude, bpmn, limit)
+    G = load(src, lo, hi, exclude, bpmn, limit)
     report(G)
     with open(dst, 'w') as f:
-        f.write("# %d graphs of 15 to 40 nodes from %s%s\n" % (len(G), src, ", chords only" if chords else ""))
+        f.write("# %d graphs of %d to %d nodes from %s%s\n" % (len(G), lo, hi, src, ", chords only" if chords else ""))
         for g in G: write(f, g, g['xy'], chords)
     print("%s: %d graphs" % (dst, len(G)))
     for tool, out in tools:
