@@ -137,7 +137,8 @@ implementations and computed no statistical test. Paired with random search per 
 instance and repetition from the benchmark's own released data, 66 to 98 implementations
 per dimension are not shown better than uniform sampling at the top budget, most of them
 strictly worse, and the count worse than random grows with budget. The audit is
-pre-registered, and its whole verdict table is one 20-second program run.
+pre-registered, and its whole verdict table is one 20-second program run. The audit is
+withdrawn as a paper; the verdict tables stay here.
 [example/metaphors/README.md](example/metaphors/README.md) has the pipeline.
 
 ## Build and test
