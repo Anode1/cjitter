@@ -10,12 +10,32 @@ nulls, routes for the axis probe and the sweep.
 | bpmn | hand | 1.00 | 1.00 | 0.00 | 0.00 | 0.40 | 0.31 | 0.87 | 0.85 | 0.91 |
 | bpmn | random | 0.58 | 0.63 | 0.00 | 0.00 | 0.00 | 0.03 | 0.11 | 0.26 | 0.07 |
 | bpmn | jitter | 1.00 | 1.00 | 0.00 | 0.00 | 0.18 | 0.31 | 0.87 | 0.73 | 0.76 |
+| bpmnr | hand | 1.00 | 1.00 | 0.00 | 0.00 | 0.43 | 0.33 | 0.88 | 0.86 | 0.85 |
+| bpmnr | random | 0.62 | 0.60 | 0.00 | 0.00 | 0.00 | 0.00 | 0.11 | 0.28 | 0.06 |
+| bpmnr | jitter | 1.00 | 1.00 | 0.00 | 0.00 | 0.19 | 0.32 | 0.88 | 0.74 | 0.74 |
 | hs | hand | 1.00 | 1.00 | 0.00 | 0.00 | 0.16 | 0.20 | 0.76 | 0.59 | 0.52 |
 | hs | random | 0.67 | 0.67 | 0.00 | 0.00 | 0.00 | 0.03 | 0.12 | 0.41 | 0.07 |
 | hs | jitter | 1.00 | 1.00 | 0.00 | 0.00 | 0.06 | 0.19 | 0.76 | 0.50 | 0.44 |
 | sbgn | hand | 1.00 | 1.00 | 0.00 | 0.00 | 0.05 | 0.10 | 0.85 | 0.62 | 0.21 |
 | sbgn | random | 0.61 | 0.67 | 0.00 | 0.00 | 0.00 | 0.03 | 0.11 | 0.36 | 0.06 |
 | sbgn | jitter | 1.00 | 1.00 | 0.00 | 0.00 | 0.03 | 0.10 | 0.84 | 0.61 | 0.19 |
+
+## Median value of the distance terms at the layout, L fitted
+
+| corpus | variant | length | stress |
+|---|---|---|---|
+| bpmn | hand | 0.291 | 0.203 |
+| bpmn | random | 0.219 | 0.510 |
+| bpmn | jitter | 0.291 | 0.203 |
+| bpmnr | hand | 0.284 | 0.197 |
+| bpmnr | random | 0.215 | 0.507 |
+| bpmnr | jitter | 0.281 | 0.196 |
+| hs | hand | 0.219 | 0.217 |
+| hs | random | 0.193 | 0.435 |
+| hs | jitter | 0.219 | 0.217 |
+| sbgn | hand | 0.234 | 0.212 |
+| sbgn | random | 0.188 | 0.469 |
+| sbgn | jitter | 0.235 | 0.213 |
 
 ## BPMN random snapped to pitch 5, alignment A1
 
@@ -25,6 +45,8 @@ median q 0.076
 
 bpmn L: median 0.000 mean 0.014
 bpmn S: median 0.000 mean 0.016
+bpmnr L: median 0.000 mean 0.019
+bpmnr S: median 0.000 mean 0.017
 hs L: median 0.000 mean 0.010
 hs S: median 0.000 mean 0.005
 sbgn L: median 0.000 mean 0.016
@@ -33,5 +55,6 @@ sbgn S: median 0.000 mean 0.008
 ## C+O+A1 with a weight on length, routed corpora, --align a1
 
 bpmn: wL 0 / 0.001 / 0.01 / 0.1 -> 0.889 / 0.133 / 0.125 / 0.090
+bpmnr: wL 0 / 0.001 / 0.01 / 0.1 -> 0.846 / 0.129 / 0.115 / 0.090
 hs: wL 0 / 0.001 / 0.01 / 0.1 -> 0.514 / 0.111 / 0.097 / 0.061
 sbgn: wL 0 / 0.001 / 0.01 / 0.1 -> 0.215 / 0.067 / 0.059 / 0.028

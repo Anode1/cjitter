@@ -27,7 +27,7 @@ def spearman(x, y):
 
 if __name__ == '__main__':
     cells = sys.argv[1]
-    for stem, cname in [('hs', 'WikiPathways'), ('sbgn', 'Reactome'), ('bpmn', 'BPMN')]:
+    for stem, cname in [('hs', 'WikiPathways'), ('sbgn', 'Reactome'), ('bpmnr', 'BPMN')]:
         for term in ['crossings_alone', 'overlap_alone', 'length_alone', 'stress_alone']:
             for lay in ['hand', 'dot']:
                 rows = list(csv.DictReader(open(os.path.join(cells, '%s_%s_%s.csv' % (stem, lay, term)))))

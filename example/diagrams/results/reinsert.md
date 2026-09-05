@@ -29,6 +29,14 @@ On the rail, within 0.005 of the person's row or column (chance about 0.02): C+O
 bpmn, C+O+L against C+O+L+A1: the alignment term lands the box closer on 3349 of 6726 non-tied nodes (0.50; sign z = -0.3).
 On the rail, within 0.005 of the person's row or column (chance about 0.02): C+O+L 0.162, C+O+A1 0.160, C+O+L+A1 0.226; the discordant pairs run 710 to 264 for the added term (McNemar z = 14.3).
 
+| bpmnr | COL | 0.172 | 0.179 [0.162, 0.191] |
+| bpmnr | COA1 | 0.270 | 0.278 [0.262, 0.297] |
+| bpmnr | COLA1 | 0.171 | 0.177 [0.162, 0.192] |
+| bpmnr | chance | 0.550 | |
+
+bpmnr, C+O+L against C+O+L+A1: the alignment term lands the box closer on 3309 of 6591 non-tied nodes (0.50; sign z = 0.3).
+On the rail, within 0.005 of the person's row or column (chance about 0.02): C+O+L 0.166, C+O+A1 0.151, C+O+L+A1 0.227; the discordant pairs run 731 to 317 for the added term (McNemar z = 12.8).
+
 ## Robustness
 
 The rail-rate gain of C+O+L+A1 over C+O+L under another seed, twice the
@@ -43,21 +51,28 @@ energy), a tolerance sweep, and clustered by diagram.
 | hs | uniform sampling | 0.055 | 0.086 | +0.030 |
 | hs | tol 0.0025 | 0.058 | 0.105 | +0.047 |
 | hs | tol 0.01 | 0.136 | 0.167 | +0.032 |
-| hs | clustered gain 95% CI | | | [+0.032, +0.052] |
+| hs | clustered gain 95% CI | | | [+0.032, +0.051] |
 | sbgn | primary | 0.083 | 0.101 | +0.018 |
 | sbgn | seed 2 | 0.087 | 0.102 | +0.015 |
 | sbgn | budget 4000 | 0.086 | 0.102 | +0.016 |
 | sbgn | uniform sampling | 0.065 | 0.084 | +0.020 |
 | sbgn | tol 0.0025 | 0.050 | 0.062 | +0.011 |
 | sbgn | tol 0.01 | 0.139 | 0.156 | +0.017 |
-| sbgn | clustered gain 95% CI | | | [+0.010, +0.026] |
+| sbgn | clustered gain 95% CI | | | [+0.010, +0.028] |
 | bpmn | primary | 0.162 | 0.226 | +0.064 |
 | bpmn | seed 2 | 0.165 | 0.224 | +0.060 |
 | bpmn | budget 4000 | 0.164 | 0.223 | +0.059 |
 | bpmn | uniform sampling | 0.101 | 0.138 | +0.036 |
 | bpmn | tol 0.0025 | 0.114 | 0.199 | +0.085 |
 | bpmn | tol 0.01 | 0.237 | 0.273 | +0.036 |
-| bpmn | clustered gain 95% CI | | | [+0.052, +0.074] |
+| bpmn | clustered gain 95% CI | | | [+0.052, +0.076] |
+| bpmnr | primary | 0.166 | 0.227 | +0.060 |
+| bpmnr | seed 2 | 0.166 | 0.226 | +0.060 |
+| bpmnr | budget 4000 | 0.166 | 0.227 | +0.060 |
+| bpmnr | uniform sampling | 0.104 | 0.142 | +0.038 |
+| bpmnr | tol 0.0025 | 0.117 | 0.195 | +0.079 |
+| bpmnr | tol 0.01 | 0.241 | 0.281 | +0.040 |
+| bpmnr | clustered gain 95% CI | | | [+0.049, +0.072] |
 
 ## The rail, given the neighbourhood
 
@@ -68,3 +83,4 @@ energies, a further sign the neighbourhood is not alignment's doing.
 - hs: n = 235 near under both; C+O+L on the person's rail 0.413, C+O+L+A1 0.545; discordant 47:16, McNemar z = 3.9.
 - sbgn: n = 301 near under both; C+O+L on the person's rail 0.349, C+O+L+A1 0.455; discordant 52:20, McNemar z = 3.8.
 - bpmn: n = 568 near under both; C+O+L on the person's rail 0.532, C+O+L+A1 0.665; discordant 87:11, McNemar z = 7.7.
+- bpmnr: n = 538 near under both; C+O+L on the person's rail 0.476, C+O+L+A1 0.647; discordant 110:18, McNemar z = 8.1.

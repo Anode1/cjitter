@@ -36,11 +36,11 @@ def run(job):
     return out
 
 W = dict(ENERGIES)
-jobs = [(c, n, w, '', BUDGET, '1', 'climb') for c in ('hs', 'sbgn', 'bpmn')
+jobs = [(c, n, w, '', BUDGET, '1', 'climb') for c in ('hs', 'sbgn', 'bpmn', 'bpmnr')
         for n, w in ENERGIES]
 # robustness variants, C+O+L and C+O+L+A1 only: another seed, twice the budget, and
 # the library's matched-budget control, uniform sampling under the same energy
-for c in ('hs', 'sbgn', 'bpmn'):
+for c in ('hs', 'sbgn', 'bpmn', 'bpmnr'):
     for n in ('COL', 'COLA1'):
         jobs += [(c, n, W[n], '_s2', BUDGET, '2', 'climb'),
                  (c, n, W[n], '_b4000', '4000', '1', 'climb'),
@@ -65,7 +65,7 @@ lines = ["# The box-reinsertion benchmark", "",
          "| corpus | energy | median dist | per-diagram median [95% CI] |",
          "| --- | --- | --- | --- |"]
 rng = random.Random(1)
-for corpus in ('hs', 'sbgn', 'bpmn'):
+for corpus in ('hs', 'sbgn', 'bpmn', 'bpmnr'):
     base = rows(corpus, 'COL')
     chance = []
     for r in base:
@@ -114,7 +114,7 @@ lines += ["## Robustness", "",
           "budget, the library's matched-budget control (uniform sampling under the same",
           "energy), a tolerance sweep, and clustered by diagram.", "",
           "| corpus | variant | C+O+L | C+O+L+A1 | gain |", "| --- | --- | --- | --- | --- |"]
-for corpus in ('hs', 'sbgn', 'bpmn'):
+for corpus in ('hs', 'sbgn', 'bpmn', 'bpmnr'):
     for tag, name in (('', 'primary'), ('_s2', 'seed 2'), ('_b4000', 'budget 4000'),
                       ('_rand', 'uniform sampling')):
         a, b = rail_rate(corpus, 'COL', tag), rail_rate(corpus, 'COLA1', tag)
@@ -145,7 +145,7 @@ lines += ["", "## The rail, given the neighbourhood", "",
           "Rail rate stratified by whether the placement landed within 0.05 of the true",
           "position under both energies; the near-stratum sizes barely differ between",
           "energies, a further sign the neighbourhood is not alignment's doing.", ""]
-for corpus in ('hs', 'sbgn', 'bpmn'):
+for corpus in ('hs', 'sbgn', 'bpmn', 'bpmnr'):
     A, B = rows(corpus, 'COL'), rows(corpus, 'COLA1')
     def on(r):
         return (abs(float(r['placedx']) - float(r['truex'])) < 0.005
