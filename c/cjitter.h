@@ -15,7 +15,7 @@
  * the median, the range over seeds, the per-seed wins against the control, and the exact
  * one-sided sign-test probability of that many wins under a fair coin. The verdict is "better"
  * only when that probability is at or under 5%; anything else prints "not shown", which is a
- * failure to demonstrate improvement and says nothing about equality. A search that cannot
+ * failure to demonstrate improvement, not a finding of equality. A search that cannot
  * beat uniform sampling at equal cost is a result worth having, and most libraries never
  * measure it.
  *
@@ -99,7 +99,7 @@ typedef struct {
  * Measure it against block = n with cjitter_compare, the way you would measure any other
  * method.
  *
- * verify buys an honest number out of a noisy objective; the cjitter_result comment says what
+ * verify buys a number a noisy objective can stand behind; the cjitter_result comment has what
  * goes wrong without it. It lives here rather than in the budget for two reasons. A tuning is
  * already part of a result's identity, and two runs verified differently do not compare. And
  * a tuning must come from cjitter_tuning_default, where a budget is routinely filled field by

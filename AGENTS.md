@@ -3,8 +3,8 @@
 `cjitter` is four stochastic searches over a box of real variables, in **C99**, behind one fitness
 interface, with uniform random sampling as a control that runs at the same budget. It is the third
 of three: [linearr](https://github.com/Anode1/linearr) fits the line, [bpnn](https://github.com/Anode1/bpnn)
-fits the curve, and each says when not to believe itself. This one searches, with the control run
-beside it so it can say when the search was luck.
+fits the curve, and each reports when not to believe itself. This one searches, with the control run
+beside it to report when the search was luck.
 
 ## Why it exists
 
@@ -39,8 +39,8 @@ plus noise is jitter, which is why the name fits the whole family.
   (the diagram application in full, with its measured tables). Every number in all of them
   comes from running the shipped binaries; the code is the ground truth and the documents
   follow it.
-- Hard constraints belong in `repair`, never in the fitness; `cjitter.h` says why at the
-  `cjitter_repair` typedef.
+- Hard constraints belong in `repair`, never in the fitness; the reason is at the
+  `cjitter_repair` typedef in `cjitter.h`.
 
 ## Build and test
 
@@ -119,7 +119,7 @@ shared panel had already bought.
 The measured results live in README.md's labels table and example/erd/README.md's two
 sections and are not restated here. The shape of
 them: all three searches now beat the control on every seed of both examples, and the ERD
-searches also beat the human's accepted layout, which says the objective misses what the
+searches also beat the human's accepted layout, so the objective misses what the
 human optimizes, semantic grouping, aligned rows, room to grow, and never that the tool
 out-draws a person.
 
@@ -130,15 +130,18 @@ length of the overlap; a crossing count is flat under small moves, so the search
 follow and walks at random on the plateau. Where a count is unavoidable, add a continuous
 nearness term beside it.
 
-Tier the weights by orders of magnitude rather than tuning them. In the ERD example: penetration
-and crossings at 100, connector length at 1.
-
-Then check what the tiers weigh at the answer, because a weight is not a magnitude. This
-objective was documented as one where "length only ever breaks ties", and that is true of the
-human's layout and false of every layout a search returns: the searches drive penetration to
-zero, and what is left is a few dozen crossings at 100 against sixty connectors of a few
-hundred units each, so length is 81 to 90 percent of everything that varies and the answer is
-the one length prefers. The decomposition is cheap to print and nobody printed it for a year.
+Tier the weights by orders of magnitude rather than tuning them, then check what the tiers
+weigh at the answer, because a weight is not a magnitude. The ERD objective was documented as
+one where "length only ever breaks ties" with crossings at 100 and raw length at 1, and that
+was true of the human's layout and false of every layout a search returned: the searches
+drive penetration to zero, and what was left was a few dozen crossings at 100 against sixty
+connectors of a few hundred units each, so length was 81 to 90 percent of everything that
+varied and the answer was the one length preferred. The decomposition is cheap to print and
+nobody printed it for a year; the film's caption now prints it on every frame. The fix was a
+unit: length in canvas half-perimeters, under 60 for the whole drawing, so the tiers are
+lexicographic in fact. In the same pass the crossing count stopped excluding adjacent pairs,
+which had hidden half the crossings on screen, and started excluding crossings under a table,
+which nobody sees. docs/objective.md carries both lessons.
 
 Score the medium the reader sees. The ERD edges are routed orthogonally (L and Z shapes, the
 middle segment sliding across the channel) before anything is measured, because that is what
@@ -258,23 +261,24 @@ is why a visible defect survived every gate, four reviews and a paper.
 
        labels    climb 12.8 -> 0, anneal 128 -> 0, ga 1.38 -> 0. All three reach exactly 0
                  on all 7 seeds, range 0: the clean layout, which nothing reached before.
-       erd routed  climb 46134 -> 32293 (range 18662 -> 178), anneal 50692 -> 32579,
-                 ga 40119 -> 39571 (range 4555 -> 23872).
-       erd straight  climb 116506 -> 69142, anneal 104588 -> 70633, ga 72902 -> 80240.
+       erd routed  climb 5310 -> 2407 (range 11276 -> 401), anneal 6008 -> 3007,
+                 ga 4608 -> 5208 (range 16603 -> 18600); a routed score is 100 per
+                 crossing plus a few units of length, so read 53 -> 24 crossings.
+       erd straight  climb 69360 -> 48873, anneal 96897 -> 48778, ga 50471 -> 67803.
 
    Two things to read there. The single-point searches gain most, and their spread over seeds
-   collapses, which matters more than the median: climb's routed range of 178 says it finds
-   the same answer from every seed. And the ga does not gain, and on the erd loses, because
-   only its mutation is blocked while crossover still blends every coordinate; that is a weak
-   variant, not a bug, and the honest thing is to report it rather than exempt the ga.
+   collapses, which matters more than the median: climb's routed range of four crossings says
+   it finds nearly the same answer from every seed. And the ga does not gain, and on the erd
+   loses, because only its mutation is blocked while crossover still blends every coordinate;
+   that is a weak variant, not a bug, and it is reported rather than exempted.
 
    How the examples took it: as an option, not a switch. `labels` gains a fourth argument and
    `erd` a `--block N`, both defaulting to the tuning default, so every number pinned in
    tests/cli.sh and quoted in README.md is the number it always was and no re-measurement was
    needed. The film is the exception and the reason the block exists: `erd_movie` sets block 2
    outright, because at the default a proposal displaces all ten tables and the reader watches
-   the migration teleport 47 times instead of tables finding their neighbours. Rebuilt it is
-   124 improvements and 32293 against 53061.
+   the migration teleport 30 times instead of tables finding their neighbours. Rebuilt it is
+   126 improvements and 28 crossings against 45; the panel's median is 24.
 
    `auto` stays climb, and the reason is now written down where it was missing. The migration
    benchmark in ~/articles/cjitter ranks climb the budget-efficient method (it separates from
@@ -297,7 +301,7 @@ is why a visible defect survived every gate, four reviews and a paper.
 
 4. **The router**, until it reproduces the human layout's 0 crossings and 0 penetration. The
    current one (two bends, border anchors at per-edge attachment slots, sequential and aware
-   of every connector already placed) measures 27 and 323 on that layout, and the run prints
+   of every connector already placed) measures 32 and 323 on that layout, and the run prints
    the number so nobody mistakes the floor for the human's. What remains: more bends; a grid
    router.
    Every score comparison against the human sharpens exactly as fast as this number falls.

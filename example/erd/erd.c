@@ -10,14 +10,21 @@
  * centroid heuristic.
  *
  * Edges are routed the way the tool draws them, orthogonal polylines chosen by route_edge,
- * and the OBJECTIVE reads the routed connectors, in tiers so that no weight has to be
- * guessed:
+ * and the OBJECTIVE reads the routed connectors, in tiers that are lexicographic in fact and
+ * not only in name:
  *   a connector passing through a table   the length of the overlap, x100
- *   connectors crossing each other        the count, x100
- *   connector length                      the total, x1, breaking ties toward tidy
- * Node overlap and staying on canvas are HARD, enforced by the repair callback. The router's
- * quality is measured, not assumed: the run prints what it reproduces of the human layout's
- * known 0 crossings and 0 penetration, and every score means only as much as that line.
+ *   connectors crossing each other        every crossing a reader can see, x100
+ *   connector length                      the total, in canvas half-perimeters, x1
+ * The length unit is the tiering. In raw canvas units the whole drawing is tens of thousands
+ * and a search shortens connectors by adding crossings, which measured as 81 to 90 percent of
+ * what varied at every returned layout; divided by cw + ch the whole drawing's length is
+ * under 60 and can never outweigh one crossing. A crossing counts when a reader sees it:
+ * adjacent edges included, since two connectors out of one table cross each other far from
+ * it as visibly as any pair, and crossings under a table excluded, since the table is drawn
+ * over them. Node overlap and staying on canvas are HARD, enforced by the repair callback.
+ * The router's quality is measured, not assumed: the run prints what it reproduces of the
+ * human layout's known 0 crossings and 0 penetration, and every score means only as much as
+ * that line.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,11 +49,10 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
  * are the shipped budget, and every pinned number in tests/cli.sh and the README is a
  * function of them.
  *
- * W_TIER's two orders of magnitude are a weight, not a magnitude, and this comment used to
- * claim they made length a tie-breaker. Measured at a returned layout they do not: the
- * searches drive penetration to zero, leaving a few dozen crossings at 100 against 59
- * connectors of a few hundred units each, so length carries 81 to 90 percent of what varies
- * and picks the answer. The tiering is still right; the inference from it was not. */
+ * A weight is not a magnitude. W_TIER at 100 over raw length made length the answer, because
+ * 59 connectors of a few hundred units each outweigh a few dozen crossings at 100 apiece.
+ * Length is therefore scored in canvas half-perimeters (see total_of), where the whole
+ * drawing is under 60 units, and 100 per crossing is a tier again. */
 #define W_TIER      100.0   /* penetration and crossings, against length at 1 */
 #ifndef NODE_GAP
 #define NODE_GAP    12.0    /* clearance kept between table borders, in canvas units */
@@ -58,9 +64,6 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
  * harness that #includes this file to reuse the objective will define its own, and an
  * unguarded #define here silently wins over -D. That cost a 101-seed sweep which ran at 5
  * and reported it as 101. */
-#ifndef COUNT_ADJACENT_CROSSINGS
-#define COUNT_ADJACENT_CROSSINGS 0
-#endif
 #ifndef EVALS
 #define EVALS       8000
 #endif
@@ -89,6 +92,13 @@ typedef struct {
     double minx, maxx, miny, maxy;
 } Route;
 
+/* The objective's three terms, kept apart so a report can say what a score is made of. */
+typedef struct {
+    double pen;    /* connector length lying inside tables, canvas units */
+    long   crs;    /* crossings a reader sees */
+    double len;    /* connector length, canvas units */
+} Terms;
+
 typedef struct {
     long   n, nfixed, ne;
     double x[MAXN], y[MAXN];       /* fixed tables keep these; free ones are read from the vector */
@@ -102,7 +112,7 @@ typedef struct {
     int    straight;               /* the one style boolean: straight diagonal edges, the
                                       representation diagonal-edge tools draw, instead of
                                       routed orthogonal connectors */
-    double konst;                  /* every term among frozen tables only, summed once */
+    Terms  kt;                     /* every term among frozen tables only, summed once */
     Route  rt[MAXE];               /* frozen routes fixed once; new-touching rerouted per score */
     double cw, ch;
 } Erd;
@@ -114,8 +124,17 @@ static void pos(const Erd *g, const double *v, long i, double *px, double *py)
     else { *px = v[2 * (i - g->nfixed)]; *py = v[2 * (i - g->nfixed) + 1]; }
 }
 
+/* The score of a set of terms, and the one place the tiering is written. Length is divided by
+ * the canvas half-perimeter, so the longest drawing the canvas can hold scores under one
+ * crossing and the tiers are lexicographic: penetration and crossings first, length only
+ * among layouts that tie on both. */
+static double total_of(const Erd *g, const Terms *t)
+{
+    return W_TIER * (t->pen + (double)t->crs) + t->len / (g->cw + g->ch);
+}
+
 /* Length of segment AB lying inside rectangle i. Continuous in the table's position, which a
- * crossing COUNT is not; the README's objective section says why that matters. */
+ * crossing COUNT is not; docs/objective.md has the reason that matters. */
 static double through(const Erd *g, const double *v, long i, double ax, double ay,
                       double bx, double by)
 {
@@ -238,27 +257,21 @@ static int routed_before(const Erd *g, long b, long a, int mode)
     return b < a;
 }
 
-static long routes_cross(const Route *p, const Route *q);
+static long routes_cross(const Erd *g, const double *v, long ntab,
+                         const Route *p, const Route *q);
 
-static long cand_cross(const Erd *g, const Route *rt, const Route *cand, long a, int mode)
+/* Crossings between candidate route CAND for edge A and every route it can see. Two edges
+ * sharing a table are priced like any other pair: crossing-number theory excludes adjacent
+ * pairs because an optimal drawing can be assumed to have none, but two connectors leaving
+ * one table at fixed attachment slots do cross far from it, and a reader sees it. On this
+ * instance the exclusion hid half the crossings on screen. */
+static long cand_cross(const Erd *g, const double *v, long ntab, const Route *rt,
+                       const Route *cand, long a, int mode)
 {
     long b, k = 0;
-    for (b = 0; b < g->ne; b++) {
-        if (!routed_before(g, b, a, mode)) continue;
-        /* Two edges that share a table are not priced against each other. The convention
-         * comes from crossing-number theory, where an optimal drawing can be assumed to have
-         * no crossings between adjacent edges, so excluding them costs nothing. That argument
-         * does not carry to routed connectors leaving fixed attachment slots, where two edges
-         * out of the same table genuinely cross far away from it and a reader sees it. On the
-         * migration instances the exclusion discards 33 to 78 percent of the crossings present
-         * in the drawing. Build with -DCOUNT_ADJACENT_CROSSINGS=1 to price them; the default
-         * is 0 because every number pinned by the suite was measured under it. */
-#if !COUNT_ADJACENT_CROSSINGS
-        if (g->e[a][0] == g->e[b][0] || g->e[a][0] == g->e[b][1] ||
-            g->e[a][1] == g->e[b][0] || g->e[a][1] == g->e[b][1]) continue;
-#endif
-        k += routes_cross(cand, &rt[b]);
-    }
+    for (b = 0; b < g->ne; b++)
+        if (routed_before(g, b, a, mode))
+            k += routes_cross(g, v, ntab, cand, &rt[b]);
     return k;
 }
 
@@ -267,18 +280,16 @@ static long cand_cross(const Erd *g, const Route *rt, const Route *cand, long a,
  * across the channel between the endpoints and one step beyond it on either side, which is
  * the nudge a person applies to a connector to clear an obstacle. The candidate with the
  * least penetration wins, length breaking ties, the earlier shape winning exact ties so the
- * choice is deterministic. Only the first NTAB tables exist for penetration, which is how
- * frozen edges get routed against the frozen diagram alone. Returns the route's own cost,
- * penetration at W_TIER plus length; crossings are the caller's to add, since they depend on
- * every other route. */
-static double route_edge(const Erd *g, const double *v, long a, long ntab,
-                         const Route *rt, int mode, Route *r,
-                         double *pen_out, long *crs_out)
+ * choice is deterministic. Only the first NTAB tables exist for penetration and for hiding
+ * a crossing, which is how frozen edges get routed against the frozen diagram alone. The
+ * chosen route's terms are written to T. */
+static void route_edge(const Erd *g, const double *v, long a, long ntab,
+                       const Route *rt, int mode, Route *r, Terms *t)
 {
     static const double TIN[5]  = { 0.15, 0.3, 0.5, 0.7, 0.85 };
     static const double TOUT[6] = { -0.75, -0.5, -0.25, 1.25, 1.5, 1.75 };
-    double ax, ay, bx, by, bestcost = 0, bestpen = 0;
-    long e0 = g->e[a][0], e1 = g->e[a][1], bestcrs = 0;
+    double ax, ay, bx, by, bestcost = 0;
+    long e0 = g->e[a][0], e1 = g->e[a][1];
     int c, have = 0, nc = 24;
     pos(g, v, e0, &ax, &ay);
     pos(g, v, e1, &bx, &by);
@@ -299,13 +310,10 @@ static double route_edge(const Erd *g, const double *v, long a, long ntab,
             pen += through(g, v, i, cand.px[0], cand.py[0], cand.px[1], cand.py[1]);
         }
         *r = cand;
-        {
-            long crs = cand_cross(g, rt, &cand, a, mode);
-            if (pen_out) *pen_out = pen;
-            if (crs_out) *crs_out = crs;
-            return W_TIER * (pen + (double)crs)
-                 + seglen(cand.px[1] - cand.px[0], cand.py[1] - cand.py[0]);
-        }
+        t->pen = pen;
+        t->crs = cand_cross(g, v, ntab, rt, &cand, a, mode);
+        t->len = seglen(cand.px[1] - cand.px[0], cand.py[1] - cand.py[0]);
+        return;
     }
     for (c = 0; c < nc; c++) {
         Route cand;
@@ -373,40 +381,61 @@ static double route_edge(const Erd *g, const double *v, long a, long ntab,
         }
         for (s = 0; s + 1 < cand.np; s++)
             len += fabs(cand.px[s+1] - cand.px[s]) + fabs(cand.py[s+1] - cand.py[s]);
-        cost = W_TIER * pen + len;
+        cost = W_TIER * pen + len / (g->cw + g->ch);
         if (!have || cost < bestcost + 1e-9) {
             long crs;
             /* crossings are the expensive part of a candidate's price, so they are only
              * computed when penetration and length alone have not already lost */
-            crs = cand_cross(g, rt, &cand, a, mode);
+            crs = cand_cross(g, v, ntab, rt, &cand, a, mode);
             cost += W_TIER * (double)crs;
             if (!have || cost < bestcost) {
-                have = 1; bestcost = cost; bestpen = pen; bestcrs = crs; *r = cand;
+                have = 1; bestcost = cost; *r = cand;
+                t->pen = pen; t->crs = crs; t->len = len;
             }
             /* A clean candidate among the in-channel shapes ends the search: those shapes
              * share their Manhattan length, the detours are longer, and an equal-cost later
              * shape would lose the tie anyway. */
-            if (bestpen == 0 && bestcrs == 0 && c < 12) break;
+            if (t->pen == 0 && t->crs == 0 && c < 12) break;
         }
     }
-    if (pen_out) *pen_out = bestpen;
-    if (crs_out) *crs_out = bestcrs;
-    return bestcost;
 }
 
-/* Crossings between two routed edges, bounding boxes first. Collinear overlaps are not
- * counted: two connectors sharing a grid line is what an offset exists to fix in a tool,
- * and the orientation test only sees proper crossings. */
-static long routes_cross(const Route *p, const Route *q)
+/* Is the point under one of the first NTAB tables, where a reader cannot see it? Tables are
+ * drawn over connectors, so a crossing there is not a crossing on screen; the segments
+ * through that table are paid for as penetration instead. Strict, so a crossing on a
+ * border is visible. */
+static int hidden(const Erd *g, const double *v, long ntab, double x, double y)
+{
+    long i;
+    for (i = 0; i < ntab; i++) {
+        double px, py;
+        pos(g, v, i, &px, &py);
+        if (fabs(x - px) < g->w[i]/2 && fabs(y - py) < g->h[i]/2) return 1;
+    }
+    return 0;
+}
+
+/* Crossings a reader sees between two routed edges, bounding boxes first. Collinear overlaps
+ * are not counted: two connectors sharing a grid line is what an offset exists to fix in a
+ * tool, and the orientation test only sees proper crossings. Division is correctly rounded
+ * under IEEE 754, so the crossing point reproduces like everything else here. */
+static long routes_cross(const Erd *g, const double *v, long ntab,
+                         const Route *p, const Route *q)
 {
     long k = 0;
     int i, j;
     if (p->maxx < q->minx || p->minx > q->maxx ||
         p->maxy < q->miny || p->miny > q->maxy) return 0;
     for (i = 0; i + 1 < p->np; i++)
-        for (j = 0; j + 1 < q->np; j++)
-            if (cross(p->px[i], p->py[i], p->px[i+1], p->py[i+1],
-                      q->px[j], q->py[j], q->px[j+1], q->py[j+1])) k++;
+        for (j = 0; j + 1 < q->np; j++) {
+            double ax = p->px[i], ay = p->py[i], bx = p->px[i+1], by = p->py[i+1];
+            double cx = q->px[j], cy = q->py[j], dx = q->px[j+1], dy = q->py[j+1];
+            double den, u;
+            if (!cross(ax, ay, bx, by, cx, cy, dx, dy)) continue;
+            den = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);   /* nonzero: they cross */
+            u = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / den;
+            if (!hidden(g, v, ntab, ax + u * (bx - ax), ay + u * (by - ay))) k++;
+        }
     return k;
 }
 
@@ -414,39 +443,53 @@ static long routes_cross(const Route *p, const Route *q)
  * frozen diagram and never again: a maintained diagram does not re-route its existing
  * connectors when a migration adds tables, and the search should have to work around them
  * where they already run. */
-static double frozen_part(Erd *g)
+static void frozen_part(Erd *g)
 {
-    double total = 0;
+    Terms t;
     long a;
+    g->kt.pen = 0; g->kt.crs = 0; g->kt.len = 0;
     for (a = 0; a < g->ne; a++)
         g->enew[a] = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
     for (a = 0; a < g->ne; a++)
-        if (!g->enew[a])
-            total += route_edge(g, NULL, a, g->nfixed, g->rt, 0, &g->rt[a], NULL, NULL);
-    return total;
+        if (!g->enew[a]) {
+            route_edge(g, NULL, a, g->nfixed, g->rt, 0, &g->rt[a], &t);
+            g->kt.pen += t.pen; g->kt.crs += t.crs; g->kt.len += t.len;
+        }
 }
 
-static double score(const double *v, void *ctx)
+/* The objective's terms at layout V, under the routing the score reads: frozen routes as
+ * frozen_part left them, the migration's edges routed now. This is the one function that
+ * knows what a score is made of; score() sums it and the reports print it. */
+static void terms(Erd *g, const double *v, Terms *t)
 {
-    Erd *g = ctx;
-    double total = g->konst;
+    Terms et;
     long a, i;
     int s;
+    *t = g->kt;
     /* the migration's edges, routed in index order, each seeing every fixed connector and
-     * the migration edges already routed this evaluation; the route's cost already carries
-     * its crossings, so no pair is priced twice */
+     * the migration edges already routed this evaluation; a route's crossings are with the
+     * routes before it, so no pair is priced twice */
     for (a = 0; a < g->ne; a++)
-        if (g->enew[a])
-            total += route_edge(g, v, a, g->n, g->rt, 1, &g->rt[a], NULL, NULL);
+        if (g->enew[a]) {
+            route_edge(g, v, a, g->n, g->rt, 1, &g->rt[a], &et);
+            t->pen += et.pen; t->crs += et.crs; t->len += et.len;
+        }
     /* the fixed connectors, penetrating any new table parked on top of them */
     for (a = 0; a < g->ne; a++) {
         if (g->enew[a]) continue;
         for (i = g->nfixed; i < g->n; i++)
             for (s = 0; s + 1 < g->rt[a].np; s++)
-                total += W_TIER * apen(g, v, i, g->rt[a].px[s], g->rt[a].py[s],
-                                       g->rt[a].px[s+1], g->rt[a].py[s+1]);
+                t->pen += apen(g, v, i, g->rt[a].px[s], g->rt[a].py[s],
+                               g->rt[a].px[s+1], g->rt[a].py[s+1]);
     }
-    return total;
+}
+
+static double score(const double *v, void *ctx)
+{
+    Erd *g = ctx;
+    Terms t;
+    terms(g, v, &t);
+    return total_of(g, &t);
 }
 
 /* Route every edge against every table at layout V, as the diagram would actually be drawn,
@@ -460,11 +503,10 @@ static void layout_report(const Erd *g, const double *v, Route *rt,
     long a, k = 0;
     double p = 0;
     for (a = 0; a < g->ne; a++) {
-        double ep;
-        long ec;
-        route_edge(g, v, a, g->n, rt, 2, &rt[a], &ep, &ec);
-        p += ep;
-        k += ec;
+        Terms t;
+        route_edge(g, v, a, g->n, rt, 2, &rt[a], &t);
+        p += t.pen;
+        k += t.crs;
     }
     *ncross = k;
     *pen = p;
@@ -616,13 +658,15 @@ static void centroid_place(const Erd *g, double *x)
 
 /* One panel of the picture: the canvas, the routed connectors under the tables (the new
  * tables' edges darker, since they are the ones being judged), then every table with its
- * name. The routing drawn is the routing scored: the picture and the number cannot drift. */
-static void svg_panel(const Erd *g, const double *v, double ox)
+ * name. The routing drawn is the routing scored, frozen connectors where the frozen diagram
+ * left them, so the picture shows what the number charges: a frozen connector under a new
+ * table is drawn under it. G is written because terms() reroutes the migration's edges. */
+static void svg_panel(Erd *g, const double *v, double ox)
 {
-    static Route rt[MAXE];
-    double pen;
-    long a, i, nc;
-    layout_report(g, v, rt, &nc, &pen);
+    const Route *rt = g->rt;
+    Terms t;
+    long a, i;
+    terms(g, v, &t);
     printf("  <rect x='%g' y='0' width='%g' height='%g' fill='#fafafa' stroke='#ccc'/>\n",
            ox, g->cw, g->ch);
     for (a = 0; a < g->ne; a++) {
@@ -650,14 +694,14 @@ static void svg_panel(const Erd *g, const double *v, double ox)
  * search's answer, and the layout the human actually accepted. The frozen tables are
  * identical in the middle two and the reference; the scrambled panel is the diagram nobody
  * wants, the reason the hour was spent. */
-static void svg_out(const Erd *g, const Erd *gs, const double *xs,
+static void svg_out(Erd *g, Erd *gs, const double *xs,
                     const double *xc, double sc,
                     const double *xb, const char *method, double sb,
                     const double *xh, double sh)
 {
     double W = g->cw + 10, band = 90, H = 4 * (g->ch + band) + 10;
     const double *v[4];
-    const Erd *ge[4];
+    Erd *ge[4];
     const char *title[4];
     char t1[96], t2[96], t3[96];
     long j;
@@ -737,7 +781,7 @@ int main(int argc, char **argv)
                          - 0.5) * 0.8;
         }
     }
-    g.konst = frozen_part(&g);
+    frozen_part(&g);
 
     nv = 2 * nnew;
     for (i = 0; i < nv; i += 2) {
@@ -764,8 +808,9 @@ int main(int argc, char **argv)
         double xc[64], xb[64], xs[64], sc, sh;
         Rng sr;
         g.straight = want_svg == 2;
-        g.konst = frozen_part(&g);
-        /* the scrambled state: every table where a reverse-engineering drops it */
+        frozen_part(&g);
+        /* the scrambled state: every table where a reverse-engineering drops it, its frozen
+         * connectors routed where its frozen tables landed */
         gs = g;
         cjitter_rng_seed(&sr, 42);
         for (i = 0; i < gs.n; i++) {
@@ -774,6 +819,7 @@ int main(int argc, char **argv)
             if (i < gs.nfixed) { gs.x[i] = px; gs.y[i] = py; }
             else { xs[2*(i - gs.nfixed)] = px; xs[2*(i - gs.nfixed) + 1] = py; }
         }
+        frozen_part(&gs);
         centroid_place(&g, xc);
         legal(xc, &g);
         sc = score(xc, &g);
@@ -793,7 +839,8 @@ int main(int argc, char **argv)
            "The same experiment runs twice: first with straight diagonal edges, the\n"
            "representation diagonal-edge tools draw, then with orthogonal routed\n"
            "connectors, what the reader actually sees. Objective in both: penetration\n"
-           "and crossings at 100, length at 1. Lower is better.\n");
+           "and crossings at 100, length at 1 per canvas half-perimeter, so length only\n"
+           "ever breaks a tie. Lower is better.\n");
     printf("One proposal moves %ld of the %ld variables%s.\n", t.block, nv,
            t.block >= nv ? " (the whole vector)" : ", so a table at a time");
 
@@ -802,8 +849,9 @@ int main(int argc, char **argv)
         static Route rt[MAXE];
         double pen;
         long nc;
+        Terms tm;
         g.straight = style;
-        g.konst = frozen_part(&g);
+        frozen_part(&g);
         printf("\n---- %s ----\n\n", style ? "straight diagonal edges"
                                            : "orthogonal routed connectors");
         centroid_place(&g, x);
@@ -833,8 +881,9 @@ int main(int argc, char **argv)
             printf("\nthe layout %s found at seed 1, score %.6g:\n", r.method, r.best);
             for (k = 0; k < nnew; k++)
                 printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
-            layout_report(&g, x, rt, &nc, &pen);
-            printf("under this edge model: %ld crossings, %.6g penetration\n", nc, pen);
+            terms(&g, x, &tm);
+            printf("as scored: %ld crossings, %.6g penetration, length %.6g\n",
+                   tm.crs, tm.pen, tm.len);
             printf("closest two tables: %.6g units apart (the repair keeps %g)\n",
                    min_clearance(&g, x), NODE_GAP);
         }

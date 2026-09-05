@@ -27,7 +27,7 @@ Four methods spend the budget, and the comparison between them is the library's 
 
     make
     ./labels          # 90 rectangles in a container, minimise overlap
-    ./erd             # place new tables on an existing diagram
+    ./erd             # place new tables on an existing diagram; about a minute
 
 ## The control
 
@@ -38,8 +38,8 @@ the control, and the exact one-sided sign-test probability of that many wins und
 coin. "better" is declared only when that probability is at or under 5% after Holm correction
 across the methods compared, since testing three of them against one control at 5% each
 would otherwise call one of three null methods better about 14% of the time; the raw sign-p
-is printed beside the corrected one. "not shown" is a failure to demonstrate improvement, and
-says nothing about equality.
+is printed beside the corrected one. "not shown" is a failure to demonstrate improvement, not a
+finding of equality.
 
 The same panel is available as numbers rather than a table. `cjitter_compare_raw` hands back
 the score and the returned point of every run, `cjitter_compare_masked` runs only the methods
@@ -56,6 +56,10 @@ On the label problem, at 36% area coverage:
     climb         12.8278       39.717    7/7    0.00781    0.0234      better
     anneal        127.625      35.4232    7/7    0.00781    0.0234      better
     ga            1.38243      3.55264    7/7    0.00781    0.0234      better
+
+That table moves the whole vector on every proposal. `./labels 90 20000 7 2` moves one
+label at a time, the `block` the library is named after, and all three searches reach
+exactly 0 on all seven seeds, the clean layout none of them finds above.
 
 The control has already earned its keep once. The first GA shipped here mutated at a fixed
 scale, and the table read "no better than uniform sampling at equal cost"; an outside review
@@ -105,16 +109,19 @@ usable gradients, dimensions in the thousands.
 **`example/labels/`** places rectangles in a container with minimum overlap: the problem the
 author solved for industry in 2001, deployed, as per-label random unit steps kept when the
 summed overlap fell. Staying inside the container is a hard constraint in the repair
-callback, and `cjitter.h` says why that is not a penalty term.
+callback; the reason it is not a penalty term is at the `cjitter_repair` typedef in `cjitter.h`.
 
 **`example/erd/`** is the application this library was written for: tables added by a
 database migration, placed onto a frozen diagram whose other 34 tables a person already knows.
 The graph is a real anonymized production schema, and the objective routes every connector
 orthogonally before reading it, which is what none of the published pinning implementations
-do. A 2,000-draw null in that directory shows the maintainer's own placement separable from
-a random draw by nothing but not overlapping, so this demonstrates the library on a real
-graph and is not a benchmark for an objective. The film is climb settling the migration, one
-table per proposal:
+do, then counts the crossings a reader sees, with connector length breaking ties. A
+2,000-draw null in that directory shows the maintainer's own placement separable from a
+random draw by nothing but not overlapping, so this demonstrates the library on a real graph
+and is not a benchmark for an objective. The film is climb settling the migration, one table
+per proposal, captioned by the crossings and the connector length under tables as they fall.
+It ends at 28 crossings on screen; the same router draws the maintainer's own placement with
+32, and the fifteen-seed median is 24:
 
 ![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
 
@@ -146,7 +153,7 @@ withdrawn as a paper; the verdict tables stay here.
 
     make            build both examples
     make lib        libcjitter.a; make install puts it and cjitter.h under PREFIX
-    make check      ut + cliut -- the commit gate
+    make check      ut + cliut, the commit gate
     make ut         unit suite: refusals, the exact budget, determinism, box and repair
     make cliut      black-box: the built examples through a shell, exit codes and reproducibility
     make ut-asan    both suites under AddressSanitizer
@@ -168,10 +175,10 @@ and its limits.
 
 ## See also
 
-- [linearr](https://github.com/Anode1/linearr): least squares in C, which says when a line is the
+- [linearr](https://github.com/Anode1/linearr): least squares in C, reporting when a line is the
   wrong shape.
 - [bpnn](https://github.com/Anode1/bpnn): a backpropagation network for the tables where it is,
-  which says when not to trust the fit.
+  reporting when not to trust the fit.
 
 ## License
 

@@ -6,8 +6,8 @@
  * Keyframes are the improvements of the best layout so far, at the shipped budget and seed,
  * with cjitter_tuning.block set to 2 so each proposal moves one table.
  * The search moves in jumps; the frames between keyframes are linear interpolation, so the
- * film is a smoothed replay of the real trajectory, not the trajectory itself, and says so
- * here. Connectors are re-routed at every frame, so the reader watches the routing give way
+ * film is a smoothed replay of the real trajectory, not the trajectory itself. Connectors
+ * are re-routed at every frame, so the reader watches the routing give way
  * and settle along with the tables.
  *
  *     example/erd/erd_movie [dir]      # writes dir/frame0000.svg ... (dir must exist)
@@ -27,31 +27,38 @@
                        * The floor is one frame per improvement, so a run with many more
                        * improvements than this gets a jumpier film rather than a longer one. */
 
+#define BAND   110    /* the caption's height above the canvas, in canvas units */
+
 static struct {
     long   nkey, calls;
     double best;
     double key[MAXKEY][64];
-    double ksc[MAXKEY];
+    Terms  kt[MAXKEY];    /* what each keyframe's score is made of, for the caption */
     long   kev[MAXKEY];
 } T;
 
+/* The fitness the search sees, and the trace: the same terms score() sums, kept apart so
+ * the caption can say what the number is. */
 static double traced(const double *x, void *ctx)
 {
     Erd *g = ctx;
-    double f = score(x, ctx);
+    Terms t;
+    double f;
+    terms(g, x, &t);
+    f = total_of(g, &t);
     if (T.calls == 0 || f < T.best) {
         T.best = f;
         if (T.nkey == MAXKEY) {
             long i;
             for (i = 1; i < MAXKEY / 2; i++) {
                 memcpy(T.key[i], T.key[2*i], sizeof T.key[i]);
-                T.ksc[i] = T.ksc[2*i];
+                T.kt[i] = T.kt[2*i];
                 T.kev[i] = T.kev[2*i];
             }
             T.nkey = MAXKEY / 2;
         }
         memcpy(T.key[T.nkey], x, (size_t)(2 * (g->n - g->nfixed)) * sizeof *x);
-        T.ksc[T.nkey] = f;
+        T.kt[T.nkey] = t;
         T.kev[T.nkey] = T.calls;
         T.nkey++;
     }
@@ -59,19 +66,25 @@ static double traced(const double *x, void *ctx)
     return f;
 }
 
-static void frame(const char *dir, long idx, const Erd *g, const double *v,
-                  long eval, double sc)
+/* One frame: the caption names the keyframe the glide leaves, its score and the three terms
+ * the score is made of, so the reader watches crossings and penetration fall rather than a
+ * number. G is written because the panel reroutes the migration's edges. */
+static void frame(const char *dir, long idx, Erd *g, const double *v,
+                  long eval, const Terms *t)
 {
     char path[512];
     snprintf(path, sizeof path, "%s/frame%04ld.svg", dir, idx);
     if (!freopen(path, "w", stdout)) { perror(path); exit(1); }
     printf("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 %g %g' "
-           "font-family='sans-serif'>\n", g->cw + 10, g->ch + 90);
-    printf("<rect width='%g' height='%g' fill='white'/>\n", g->cw + 10, g->ch + 90);
-    printf("<text x='%g' y='52' text-anchor='middle' font-size='40' fill='#111'>"
-           "climb, one table per proposal: evaluation %ld, best %.6g</text>\n",
-           (g->cw + 10) / 2, eval, sc);
-    printf("<g transform='translate(0,80)'>\n");
+           "font-family='sans-serif'>\n", g->cw + 10, g->ch + BAND);
+    printf("<rect width='%g' height='%g' fill='white'/>\n", g->cw + 10, g->ch + BAND);
+    printf("<text x='%g' y='40' text-anchor='middle' font-size='32' fill='#444'>"
+           "climb, one table per proposal, seed 1: evaluation %ld, score %.6g</text>\n",
+           (g->cw + 10) / 2, eval, total_of(g, t));
+    printf("<text x='%g' y='90' text-anchor='middle' font-size='40' fill='#111'>"
+           "%ld crossings, %.0f units of connector under a table, length %.0f</text>\n",
+           (g->cw + 10) / 2, t->crs, t->pen, t->len);
+    printf("<g transform='translate(0,%d)'>\n", BAND);
     svg_panel(g, v, 5);
     printf("</g>\n</svg>\n");
     fflush(stdout);
@@ -109,7 +122,7 @@ int main(int argc, char **argv)
         }
     }
     g.straight = 0;
-    g.konst = frozen_part(&g);
+    frozen_part(&g);
 
     nv = 2 * nnew;
     for (i = 0; i < nv; i += 2) {
@@ -122,7 +135,7 @@ int main(int argc, char **argv)
     /* One table per proposal. The film exists to show the search working, and at the default
      * block every proposal displaces all ten tables at once, so the reader watches the whole
      * migration teleport on each of the 47 acceptances instead of tables finding their
-     * neighbours. cjitter.h's tuning comment says why this is the better search as well. */
+     * neighbours. The tuning comment in cjitter.h has the reason it is the better search too. */
     tun = cjitter_tuning_default(nv);
     tun.jitter = JITTER; tun.pop = POP;
     tun.block = 2;
@@ -176,10 +189,10 @@ int main(int argc, char **argv)
                 for (k = 0; k < nv; k++)
                     v[k] = T.key[kept[gap]][k]
                          + u * (T.key[kept[gap+1]][k] - T.key[kept[gap]][k]);
-                frame(dir, nf++, &g, v, T.kev[kept[gap]], T.ksc[kept[gap]]);
+                frame(dir, nf++, &g, v, T.kev[kept[gap]], &T.kt[kept[gap]]);
             }
     }
-    frame(dir, nf++, &g, T.key[T.nkey - 1], T.kev[T.nkey - 1], T.ksc[T.nkey - 1]);
+    frame(dir, nf++, &g, T.key[T.nkey - 1], T.kev[T.nkey - 1], &T.kt[T.nkey - 1]);
     fprintf(stderr, "%ld frames from %ld improvements, final %.6g\n",
             nf, T.nkey, r.best);
     return 0;

@@ -38,7 +38,7 @@ and `--L rsqrt` (1 / sqrt n) are the sensitivities.
 ## The corpora
 
 Three communities, three authoring tools, every diagram's largest connected component of 15
-to 40 boxes (`data/make_corpus.py` takes the component and says why). Beside each, the same
+to 40 boxes (`data/make_corpus.py` takes the component and gives the reason). Beside each, the same
 graphs with the same box sizes laid out by four tools, what a layout that does
 minimise something looks like under the same test: `neato` (stress, seeded so the file
 reproduces, boxes left where they overlap), `prism` (neato followed by its overlap removal,

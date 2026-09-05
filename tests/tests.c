@@ -449,7 +449,7 @@ int main(void)
         }
     }
 
-    /* verify: the honest number. The smallest value a run OBSERVES is the luckiest draw it
+    /* verify: the value the run delivered. The smallest value a run OBSERVES is the luckiest draw it
      * took, and how much luck that carries differs by method, so on a noisy objective a panel
      * of reported bests is not a fair comparison. verify re-evaluates the RETURNED point and
      * reports the mean. The checks: it is off by default and refused when negative; it costs
@@ -477,7 +477,7 @@ int main(void)
         CHECK(cjitter_run_tuned("climb", &p, &b, &dflt, &r) == 0 &&
               r.verified == r.best && r.inflation == 0 && r.verify_evals == 0 &&
               w.calls == b.evals,
-              "verify: at 0 the honest fields mirror best and nothing extra is spent");
+              "verify: at 0 the verified fields mirror best and nothing extra is spent");
 
         t = dflt; t.verify = 25;
         w.calls = 0;
@@ -504,7 +504,7 @@ int main(void)
                   "verify: it recovers the gap between the luckiest draw and the point's worth");
         }
 
-        /* compare judges on the verified value when the caller paid for it, and says so. */
+        /* compare judges on the verified value when the caller paid for it, and prints that. */
         {
             FILE *tf = tmpfile();
             long saw_col = 0, saw_note = 0;

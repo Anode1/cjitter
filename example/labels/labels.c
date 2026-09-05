@@ -7,7 +7,7 @@
  * evaluation is microseconds.
  *
  * Staying inside the container is a HARD constraint, enforced in the repair callback by clamping
- * the centre; cjitter.h says why that is not a penalty term.
+ * the centre; the reason it is not a penalty term is at the cjitter_repair typedef.
  *
  *     example/labels [labels] [evaluations] [seeds] [block]
  *

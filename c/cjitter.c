@@ -174,8 +174,8 @@ static void keep(Run *R, const double *x, double f)
 
 /* A jittered neighbour: each variable in the proposal's block moved by a normal draw scaled to
  * its own range, the rest copied. The blocks tile the vector in order and cycle, one per call,
- * so successive proposals walk across the problem; cjitter.h's tuning comment says when a
- * block narrower than n is worth having. At block >= n this is the whole vector, drawing n
+ * so successive proposals walk across the problem; when a block narrower than n is worth
+ * having is in cjitter.h's tuning comment. At block >= n this is the whole vector, drawing n
  * values in index order exactly as it always did: the default must not move a single
  * trajectory, so that path is written to be the same arithmetic in the same sequence. */
 static void jitter(Run *R, const double *from, double *to, double scale)
@@ -606,7 +606,7 @@ int cjitter_compare_masked(const cjitter_problem *p, const cjitter_budget *b,
                "it with probability at most 5%% after correcting for the number of methods\n"
                "compared: the holm column. Beside it, sign-p is the uncorrected\n"
                "exact one-sided sign test on the paired per-seed differences. not shown is a\n"
-               "failure to demonstrate improvement, and says nothing about equality.\n",
+               "failure to demonstrate improvement, not a finding of equality.\n",
                seeds, b->evals);
     if (verify > 0)
         fprintf(f, "Judged on the mean of %ld fresh evaluations of each returned point, not on\n"

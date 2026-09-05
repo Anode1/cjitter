@@ -20,7 +20,7 @@ once improves one object and spoils another, and gets rejected for the spoiling.
 `block` to the width of one object, 2 for a point in the plane, steps the search through the
 problem an object at a time, which is the mechanism this library is named after and can be
 worth an order of magnitude in budget. It is not free: where the good moves adjust several
-objects together, a narrow block cannot express them. `cjitter.h` says the rest, and
+objects together, a narrow block cannot express them. The rest is in `cjitter.h`, and
 `cjitter_compare_tuned` measures it for your problem the way it measures everything else.
 
 Blocks tile the vector in order and cycle, one per proposal, so climb, anneal and the ga's
@@ -37,7 +37,7 @@ descends from moved one label at a time, per-label random unit steps kept when t
 overlap fell. All four methods here originally moved the whole vector at once; the block put
 the founding mechanism back, as a parameter anyone can measure.
 
-## verify: an honest number when the objective is noisy
+## verify: the number a noisy objective can stand behind
 
 If your fitness returns a slightly different number each time it is called, a held-out error
 from a training run, a simulation, anything sampled, then the smallest value a search
