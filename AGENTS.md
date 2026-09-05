@@ -305,10 +305,15 @@ is why a visible defect survived every gate, four reviews and a paper.
 
 4. **The router**, until it reproduces the human layout's 0 crossings and 0 penetration. The
    current one (two bends, the middle segment nudged up to three thirds of a table width past
-   the channel, border anchors at per-edge attachment slots, sequential and aware of every
-   connector already placed) measures 36 and 0 on that layout, and the run prints the number
-   so nobody mistakes the floor for the human's. What remains: more bends; a grid router.
-   Every score comparison against the human sharpens exactly as fast as this number falls.
+   the channel, border anchors at attachment slots ranked by where the connector goes, a
+   first pass in index order and two passes re-routing each connector against all the
+   others) measures 31 and 0 on that layout, and the run prints the number so nobody
+   mistakes the floor for the human's. Of the 9 crossings left among the frozen connectors,
+   choosing all 41 shapes jointly by search removes none, so what remains is the shape
+   family: more bends, a free departure side, or a grid router. Letting a frozen connector
+   re-route around a table dropped on it, which is what the maintainer's tool did, measured
+   18 to 20 on the film against 24, and is a change of premise rather than of router. Every
+   score comparison against the human sharpens exactly as fast as this number falls.
 5. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then
    interpolates between "nothing moves" and "full redraw". It also makes the search easier, by
