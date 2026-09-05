@@ -58,8 +58,21 @@ film's last frame while its caption counted 23. Crossings priced above any lengt
 tables to the corners along crossing-free border routes. Length without room wedged every
 new table into the nearest cluster at the repair's 12 units with a quarter of the canvas
 empty. Over the same fifteen seeds, climb at `block` 2 returned drawings with 39 visible
-crossings on average under the first score and 26 under this one, 26 on fourteen seeds and
-27 on the other.
+crossings on average under the first score and 26 under this one, both with the router
+before the two changes that follow.
+
+Two changes to the router take the same runs to 24. Connectors left a table at slots
+assigned in edge order, so two connectors out of one side, bound for targets in the other
+order, crossed at the table; three of the 26 were such pairs sharing USER. Slots are now
+ranked along the side by where the connector goes, and the connectors sum 10 percent
+shorter. And the frozen connectors were routed once, in index order, each seeing only the
+ones before it, so the first into a channel took it and every later one paid. Two more
+passes, each connector re-routed against all the others, take the crossings among the
+frozen connectors from 13 to 9, and a third pass changes nothing. The 9 that remain are the
+router's shapes: the maintainer's drawing of the same tables has none, and choosing all 41
+frozen shapes jointly by search also returns 9. The search was not the limit at any point:
+under the earlier router, climb and anneal at sixteen times the budget, and every
+single-table move on a 24-unit grid from the final layout, returned the same 26.
 
 ## The film
 
@@ -67,17 +80,17 @@ The search itself is worth watching. The film is a smoothed replay of climb's im
 at the shipped budget and seed, with `block` set to 2: the frozen diagram stands still, the
 migration's ten tables glide from the first random draw into their neighbourhoods, and the
 connectors re-route at every frame. The caption carries the score and the terms it is made
-of, so what falls is a count: 3162 units of connector under tables and 78 crossings at the
-first draw, penetration gone by evaluation 371, crossings at 26 from evaluation 2842, the
-rest of the budget shortening connectors and backing tables off their neighbours. Fourteen
-of the fifteen seeds end at 26 crossings and the other at 27. `make movie` rebuilds it.
+of, so what falls is a count: 3425 units of connector under tables and 72 crossings at the
+first draw, penetration gone by evaluation 463, crossings at 24 from evaluation 2509, the
+rest of the budget shortening connectors and backing tables off their neighbours. Eleven
+of the fifteen seeds end at 24 crossings and the other four at 23. `make movie` rebuilds it.
 
 The block is why the film is watchable, and the reason is worth stating. At the default
 block, one proposal moves all ten tables at once, so a proposal that seats one table beside
-its neighbour usually unseats another and is rejected for it: the run improves 35 times in
+its neighbour usually unseats another and is rejected for it: the run improves 53 times in
 8000 evaluations and each improvement displaces the whole migration, which reads as ten
-tables teleporting together. At `block` 2 the same climb improves 139 times, each moving one
-table, and ends at 26 crossings against 40. What the film shows is what the objective was
+tables teleporting together. At `block` 2 the same climb improves 150 times, each moving one
+table, and ends at 24 crossings against 35. What the film shows is what the objective was
 always asking for and the proposal shape could not express.
 
 ![The migration's tables settling into the frozen diagram](erd_settle.gif)
@@ -106,7 +119,7 @@ above:
 
 Each edge model is calibrated against the one certain fact about the human's layout: it
 achieved zero crossings and zero edges under a table on screen. The straight model charges
-that clean screen 20 crossings and 1944 penetration; the routed model 36 crossings and no
+that clean screen 20 crossings and 1944 penetration; the routed model 31 crossings and no
 penetration, so it reproduces one of the two. Every score means only as much as its
 calibration line, and the run prints both:
 
@@ -126,17 +139,17 @@ calibration line, and the run prints both:
 
     ---- orthogonal routed connectors ----
 
-    centroid         224719   (the centroid rule: each new table at its neighbours' centroid)
-    human            173640   (the human placement, where the maintainer put them)
-               36 crossings, 0 penetration under this edge model
+    centroid         216640   (the centroid rule: each new table at its neighbours' centroid)
+    human            169265   (the human placement, where the maintainer put them)
+               31 crossings, 0 penetration under this edge model
 
     method         median        range    wins    sign-p      holm   vs random
-    random         148378      45972.3       -         -         - the control
-    climb         83733.9      43135.7   15/15  3.05e-05  9.16e-05      better
-    anneal        74542.8      26679.9   15/15  3.05e-05  9.16e-05      better
-    ga            62320.5      14054.7   15/15  3.05e-05  9.16e-05      better
+    random         138801      40871.6       -         -         - the control
+    climb         75286.2      33155.4   15/15  3.05e-05  9.16e-05      better
+    anneal        74522.4      61076.3   15/15  3.05e-05  9.16e-05      better
+    ga            56869.8      14791.6   15/15  3.05e-05  9.16e-05      better
 
-A routed score is in units of connector. The human's 173640 is mostly the 1082 units of
+A routed score is in units of connector. The human's 169265 is mostly the 1160 units of
 frozen connector their ten tables sit on, at 100 each, which the routing the score reads
 does not move; the rest of any score is a few dozen crossings at 709 and the connectors'
 squared lengths.
@@ -152,14 +165,14 @@ Those are the default tuning's numbers, one proposal moving all twenty variables
 --block 2` moves one table per proposal instead and reports, under the routed model:
 
     method         median        range    wins    sign-p      holm   vs random
-    random         148378      45972.3       -         -         - the control
-    climb         55921.5      5248.86   15/15  3.05e-05  9.16e-05      better
-    anneal        56323.3      5626.03   15/15  3.05e-05  9.16e-05      better
-    ga            75696.5      24309.2   15/15  3.05e-05  9.16e-05      better
+    random         138801      40871.6       -         -         - the control
+    climb         47040.6      5502.43   15/15  3.05e-05  9.16e-05      better
+    anneal        47365.6      10182.6   15/15  3.05e-05  9.16e-05      better
+    ga            63854.8      23941.7   15/15  3.05e-05  9.16e-05      better
 
-Read the range column beside the medians. Climb's median falls by a third and its spread over
-the fifteen seeds from 43136 to 5249, and the drawings behind those scores have 26 crossings
-on fourteen seeds and 27 on the other, so the blocked search returns much the same drawing
+Read the range column beside the medians. Climb's median falls by more than a third and its
+spread over the fifteen seeds from 33155 to 5502, and the drawings behind those scores are
+the film's 24 and 23 crossings, so the blocked search returns much the same drawing
 whichever seed it is given, which in a tool run once is worth as much as the median. The
 genetic algorithm is the exception and it is not a bug: only its mutation is blocked while
 crossover still blends every coordinate, so a narrow block leaves it a weak-mutation GA, and
@@ -173,12 +186,12 @@ under both: a table at its neighbours' centroid lands on the connectors running 
 neighbours. Read the human rows through the calibration lines: most of the human's score in
 each section is that edge model failing to reproduce their real connectors, which is why
 even the control's median outscores them in the routed section. The comparison that survives
-is the feasibility pair. The routed seed-1 search layout reaches 0 penetration and 40
-crossings, 26 at block 2; the human's own placement routes to 0 and 36. The router now
+is the feasibility pair. The routed seed-1 search layout reaches 0 penetration and 35
+crossings, 24 at block 2; the human's own placement routes to 0 and 31. The router now
 reproduces the clean screen's zero penetration and not its zero crossings, and closing that
 gap is the router's open problem, not the search's. Connectors leave a table's border at
-that edge's own attachment point, spread by the table's degree, so no two connectors ever
-share a segment: an edge joins two tables and nothing else; a connector's middle segment may
+that edge's own attachment slot, ranked along the side by where the connector goes, so no
+two connectors ever share a segment: an edge joins two tables and nothing else; a connector's middle segment may
 be nudged up to 180 units past the channel between its tables, three steps of a third of a
 table's width, which is the nudge a person applies and no further.
 

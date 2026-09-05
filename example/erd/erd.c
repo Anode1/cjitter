@@ -76,6 +76,8 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
 #ifndef NODE_GAP
 #define NODE_GAP    12.0    /* clearance kept between table borders, in canvas units */
 #endif
+#define REROUTE     2       /* passes re-routing each frozen connector against all the others,
+                             * after the first pass in index order; frozen_part has the numbers */
 #define PUSH_SWEEPS 24      /* whole-layout push-out sweeps before the repair gives up */
 #define SEAT_STEP   24.0    /* grid step of the nearest-free-seat fallback */
 #define SEAT_RINGS  48      /* how far out that fallback will look */
@@ -127,9 +129,12 @@ typedef struct {
     long   e[MAXE][2];
     int    enew[MAXE];             /* does edge a touch a new table? decided once */
     double ofr0[MAXE], ofr1[MAXE]; /* attachment offsets, a fraction of the table side: each
-                                      edge leaves its table at its own point, spread by the
-                                      table's degree, so no two connectors share a segment
-                                      and draw as a three-way junction */
+                                      edge leaves its table at its own point, so no two
+                                      connectors share a segment and draw as a three-way
+                                      junction. ofr is the offset of a horizontal departure
+                                      along the height, ofrV of a vertical one along the
+                                      width; slot_edge ranks them */
+    double ofrV0[MAXE], ofrV1[MAXE];
     int    straight;               /* the one style boolean: straight diagonal edges, the
                                       representation diagonal-edge tools draw, instead of
                                       routed orthogonal connectors */
@@ -271,11 +276,14 @@ static void anchor(const Erd *g, const double *v, long e0, long e1, Route *r)
 
 /* Which edges edge A can already see when it routes. Mode 0 is the frozen pass (earlier
  * frozen edges only), mode 1 the scoring pass (all frozen, plus earlier migration edges),
- * mode 2 the full report (everything earlier). Later edges pay for a pair's crossing, so
- * each pair is priced exactly once. */
+ * mode 2 the full report (everything earlier), modes 3 and 4 the re-routing passes (every
+ * other frozen edge, every other edge), whose callers count pairs themselves. In the other
+ * modes later edges pay for a pair's crossing, so each pair is priced exactly once. */
 static int routed_before(const Erd *g, long b, long a, int mode)
 {
     if (b == a) return 0;
+    if (mode == 3) return !g->enew[b];
+    if (mode == 4) return 1;
     if (mode == 0) return !g->enew[b] && b < a;
     if (mode == 1) return !g->enew[b] || b < a;
     return b < a;
@@ -347,9 +355,9 @@ static void route_edge(const Erd *g, const double *v, long a, long ntab,
         long i;
         int s;
         double ya = ay + g->ofr0[a] * g->h[e0];   /* horizontal departure line */
-        double xa = ax + g->ofr0[a] * g->w[e0];   /* vertical departure line */
+        double xa = ax + g->ofrV0[a] * g->w[e0];  /* vertical departure line */
         double yb = by + g->ofr1[a] * g->h[e1];   /* horizontal arrival line */
-        double xb = bx + g->ofr1[a] * g->w[e1];   /* vertical arrival line */
+        double xb = bx + g->ofrV1[a] * g->w[e1];  /* vertical arrival line */
         if (c == 0) {                       /* L: horizontal, then vertical */
             cand.px[0] = ax; cand.py[0] = ya; cand.px[1] = xb; cand.py[1] = ya;
             cand.px[2] = xb; cand.py[2] = by; cand.np = 3;
@@ -467,14 +475,91 @@ static long routes_cross(const Erd *g, const double *v, long ntab,
     return k;
 }
 
+/* Attachment slots. Edge A leaves table I at a fraction of the side in [-0.4, 0.4]: for a
+ * horizontal departure a fraction of the height, ranked by the far end's y; for a vertical
+ * one a fraction of the width, ranked by its x. Ranked, a fan of connectors out of one side
+ * leaves in its targets' order and does not cross itself at the table; assigned in edge
+ * order, as they were, three of the film's 26 crossings were pairs sharing USER, and the
+ * connectors summed 10 percent longer. A frozen table's frozen edges are ranked among
+ * themselves once and never move, since a table added later must not move an existing
+ * connector's foot; a migration edge takes a slot in the gap between the two frozen slots
+ * its far end falls between, the new edges sharing a gap dividing it in order. A new table
+ * has no frozen edges, so its one gap is the whole side. */
+static double far_end(const Erd *g, const double *v, long a, long i, int axis)
+{
+    double px, py;
+    pos(g, v, g->e[a][0] == i ? g->e[a][1] : g->e[a][0], &px, &py);
+    return axis ? px : py;
+}
+
+/* Does B rank before A at table I: nearer far end on AXIS, index breaking a tie. */
+static int ranks_before(const Erd *g, const double *v, long b, long a, long i, int axis)
+{
+    double cb = far_end(g, v, b, i, axis), ca = far_end(g, v, a, i, axis);
+    return cb < ca || (cb == ca && b < a);
+}
+
+/* The r-th of q slots dividing [lo, hi]. */
+static double nth_slot(double lo, double hi, long r, long q)
+{
+    return lo + (hi - lo) * (double)(r + 1) / (double)(q + 1);
+}
+
+static void slot_edge(Erd *g, const double *v, long a, long i, int axis)
+{
+    long inc[MAXE], n = 0, b, k, m = 0, below = 0, q = 0, r = 0;
+    double lo = -0.4, hi = 0.4, *o;
+    for (b = 0; b < g->ne; b++)
+        if (g->e[b][0] == i || g->e[b][1] == i) inc[n++] = b;
+    for (k = 0; k < n; k++) {
+        b = inc[k];
+        if (b == a || g->enew[b]) continue;
+        m++;
+        if (ranks_before(g, v, b, a, i, axis)) below++;
+    }
+    if (g->enew[a]) {
+        if (below > 0) lo = nth_slot(-0.4, 0.4, below - 1, m);
+        if (below < m) hi = nth_slot(-0.4, 0.4, below, m);
+        /* the new edges at I whose far end falls in the same gap, and A's place among them */
+        for (k = 0; k < n; k++) {
+            long j, bb = 0;
+            b = inc[k];
+            if (!g->enew[b]) continue;
+            for (j = 0; j < n; j++)
+                if (!g->enew[inc[j]] && ranks_before(g, v, inc[j], b, i, axis)) bb++;
+            if (bb != below) continue;
+            q++;
+            if (b != a && ranks_before(g, v, b, a, i, axis)) r++;
+        }
+    } else {
+        r = below; q = m + 1;
+    }
+    o = g->e[a][0] == i ? (axis ? g->ofrV0 : g->ofr0) : (axis ? g->ofrV1 : g->ofr1);
+    o[a] = nth_slot(lo, hi, r, q);
+}
+
+/* Both ends, both axes, of the frozen edges once (V NULL) or of the migration's at layout V. */
+static void slots(Erd *g, const double *v)
+{
+    long a;
+    int axis;
+    for (a = 0; a < g->ne; a++) {
+        if (g->enew[a] != (v != NULL) || g->e[a][0] == g->e[a][1]) continue;
+        for (axis = 0; axis < 2; axis++) {
+            slot_edge(g, v, a, g->e[a][0], axis);
+            slot_edge(g, v, a, g->e[a][1], axis);
+        }
+    }
+}
+
 /* Everything among frozen tables only, summed once. Frozen edges are routed here against the
  * frozen diagram and never again: a maintained diagram does not re-route its existing
  * connectors when a migration adds tables, and the search should have to work around them
  * where they already run. */
 static void frozen_part(Erd *g)
 {
-    Terms t;
-    long a, nf = 0;
+    static Terms et[MAXE];
+    long a, b, nf = 0, pass;
     g->kt.pen = 0; g->kt.crs = 0; g->kt.room = 0; g->kt.len = 0; g->kt.len2 = 0;
     for (a = 0; a < g->ne; a++)
         g->enew[a] = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
@@ -488,12 +573,27 @@ static void frozen_part(Erd *g)
             nf++;
         }
     g->l0 = nf ? g->l0 / (double)nf : 1;
+    slots(g, NULL);
+    /* A first pass in index order, each connector seeing the ones before it, then REROUTE
+     * passes in which each is re-routed against all the others. One pass is greedy: the
+     * first connector into a channel takes it and every later one pays. Here one pass
+     * leaves 13 crossings among the frozen connectors, two more leave 9, and a third
+     * changes nothing; the maintainer's drawing of the same tables has none, and the 9 are
+     * the router's shapes, not the order: choosing all 41 shapes jointly by search also
+     * returns 9. */
     for (a = 0; a < g->ne; a++)
-        if (!g->enew[a]) {
-            route_edge(g, NULL, a, g->nfixed, g->rt, 0, &g->rt[a], &t);
-            g->kt.pen += t.pen; g->kt.crs += t.crs; g->kt.len += t.len;
-            g->kt.len2 += t.len2;
-        }
+        if (!g->enew[a]) route_edge(g, NULL, a, g->nfixed, g->rt, 0, &g->rt[a], &et[a]);
+    for (pass = 0; pass < REROUTE; pass++)
+        for (a = 0; a < g->ne; a++)
+            if (!g->enew[a]) route_edge(g, NULL, a, g->nfixed, g->rt, 3, &g->rt[a], &et[a]);
+    /* the routes' own terms, and each crossing pair once */
+    for (a = 0; a < g->ne; a++) {
+        if (g->enew[a]) continue;
+        g->kt.pen += et[a].pen; g->kt.len += et[a].len; g->kt.len2 += et[a].len2;
+        for (b = 0; b < a; b++)
+            if (!g->enew[b])
+                g->kt.crs += routes_cross(g, NULL, g->nfixed, &g->rt[a], &g->rt[b]);
+    }
 }
 
 /* Room: how far each new table's clearance from every other table falls short of ROOM, in
@@ -531,6 +631,7 @@ static void terms(Erd *g, const double *v, Terms *t)
     int s;
     *t = g->kt;
     t->room = room_term(g, v);
+    slots(g, v);
     /* the migration's edges, routed in index order, each seeing every fixed connector and
      * the migration edges already routed this evaluation; a route's crossings are with the
      * routes before it, so no pair is priced twice */
@@ -557,21 +658,27 @@ static double score(const double *v, void *ctx)
     return total_of(g, &t);
 }
 
-/* Route every edge against every table at layout V, as the diagram would actually be drawn,
- * and report what a reader sees: crossings and total penetration. This is the calibration
- * against the one certain fact about the human's layout, that it achieved zero of both by
- * hand; a router that cannot reproduce that on the human's own coordinates is weaker than
- * the tool the human was using. RT must hold ne routes. */
-static void layout_report(const Erd *g, const double *v, Route *rt,
+/* Route every edge against every table at layout V, as the diagram would actually be drawn
+ * and with the passes the score's routing gets, and report what a reader sees: crossings and
+ * total penetration. This is the calibration against the one certain fact about the human's
+ * layout, that it achieved zero of both by hand; a router that cannot reproduce that on the
+ * human's own coordinates is weaker than the tool the human was using. RT must hold ne
+ * routes. */
+static void layout_report(Erd *g, const double *v, Route *rt,
                           long *ncross, double *pen)
 {
-    long a, k = 0;
+    static Terms et[MAXE];
+    long a, b, k = 0, pass;
     double p = 0;
+    slots(g, v);
+    for (a = 0; a < g->ne; a++)
+        route_edge(g, v, a, g->n, rt, 2, &rt[a], &et[a]);
+    for (pass = 0; pass < REROUTE; pass++)
+        for (a = 0; a < g->ne; a++)
+            route_edge(g, v, a, g->n, rt, 4, &rt[a], &et[a]);
     for (a = 0; a < g->ne; a++) {
-        Terms t;
-        route_edge(g, v, a, g->n, rt, 2, &rt[a], &t);
-        p += t.pen;
-        k += t.crs;
+        p += et[a].pen;
+        for (b = 0; b < a; b++) k += routes_cross(g, v, g->n, &rt[a], &rt[b]);
     }
     *ncross = k;
     *pen = p;
@@ -834,18 +941,6 @@ int main(int argc, char **argv)
     }
     g.ne = ERD_NEDGE;
     for (i = 0; i < g.ne; i++) { g.e[i][0] = erd_edge[i][0]; g.e[i][1] = erd_edge[i][1]; }
-    /* Attachment slots: the j-th of a table's d edges leaves at fraction
-     * ((j+1)/(d+1) - 1/2) * 0.8 of the side, in edge order, deterministically. */
-    {
-        long deg[MAXN] = { 0 }, seen[MAXN] = { 0 };
-        for (i = 0; i < g.ne; i++) { deg[g.e[i][0]]++; deg[g.e[i][1]]++; }
-        for (i = 0; i < g.ne; i++) {
-            g.ofr0[i] = ((double)(seen[g.e[i][0]]++ + 1) / (double)(deg[g.e[i][0]] + 1)
-                         - 0.5) * 0.8;
-            g.ofr1[i] = ((double)(seen[g.e[i][1]]++ + 1) / (double)(deg[g.e[i][1]] + 1)
-                         - 0.5) * 0.8;
-        }
-    }
     frozen_part(&g);
 
     nv = 2 * nnew;

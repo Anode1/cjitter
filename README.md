@@ -121,8 +121,8 @@ room at the maintainer's own clearance, and each connector at its length squared
 random draw by nothing but not overlapping, so this demonstrates the library on a real graph
 and is not a benchmark for an objective. The film is climb settling the migration, one table
 per proposal, captioned by the crossings and the connector length under tables as they fall.
-It ends at 26 crossings on screen, where the same router draws the maintainer's own
-placement with 36, and fourteen of fifteen seeds end there:
+It ends at 24 crossings on screen, where the same router draws the maintainer's own
+placement with 31, and eleven of fifteen seeds end there, the other four at 23:
 
 ![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
 

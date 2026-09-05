@@ -49,7 +49,7 @@ Files: parse_*.py (corpus to JSON), stat.c to stat8.c (successive versions of th
 and energy; stat8.c is current, ALIGN_DEF selects A1/A2/A3), fitd.py and fitw.py (weight
 fitting), missing.py and missing2.py (one added term at a time), feednull*.py (the null and
 the power check), robust.py, notes.md (citation log).
-Raw archives: ~/corpora/diagrams/ (not in git).
+Raw archives: ~/articles/cjitter/corpora/ (not in git).
 
 Defect found 2026-08-22 when the corpora were rebuilt for station: parse_sbgn.py and
 parse_bpmn.py did not take the largest connected component. In the 15 to 40 node band, 126

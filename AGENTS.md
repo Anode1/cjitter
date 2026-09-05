@@ -265,13 +265,13 @@ is why a visible defect survived every gate, four reviews and a paper.
 
        labels    climb 12.8 -> 0, anneal 128 -> 0, ga 1.38 -> 0. All three reach exactly 0
                  on all 7 seeds, range 0: the clean layout, which nothing reached before.
-       erd routed  climb 83734 -> 55922 (range 43136 -> 5249), anneal 74543 -> 56323,
-                 ga 62321 -> 75697 (range 14055 -> 24309); the drawings behind climb's
-                 blocked scores have 26 crossings on fourteen seeds of fifteen.
+       erd routed  climb 75286 -> 47041 (range 33155 -> 5502), anneal 74522 -> 47366,
+                 ga 56870 -> 63855 (range 14792 -> 23942); the drawings behind climb's
+                 blocked scores have 24 crossings on eleven seeds of fifteen, 23 on the rest.
        erd straight  climb 132981 -> 83143, anneal 119654 -> 79649, ga 82633 -> 110898.
 
    Two things to read there. The single-point searches gain most, and their spread over seeds
-   collapses, which matters more than the median: climb's routed range of 5249 says
+   collapses, which matters more than the median: climb's routed range of 5502 says
    it finds nearly the same answer from every seed. And the ga does not gain, and on the erd
    loses, because only its mutation is blocked while crossover still blends every coordinate;
    that is a weak variant, not a bug, and it is reported rather than exempted.
@@ -282,7 +282,7 @@ is why a visible defect survived every gate, four reviews and a paper.
    needed. The film is the exception and the reason the block exists: `erd_movie` sets block 2
    outright, because at the default a proposal displaces all ten tables and the reader watches
    the migration teleport 35 times instead of tables finding their neighbours. Rebuilt it is
-   139 improvements and 26 crossings against 40.
+   150 improvements and 24 crossings against 35.
 
    `auto` stays climb, and the reason is now written down where it was missing. The migration
    benchmark in ~/articles/cjitter ranks climb the budget-efficient method (it separates from

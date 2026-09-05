@@ -111,16 +111,6 @@ int main(int argc, char **argv)
     }
     g.ne = ERD_NEDGE;
     for (i = 0; i < g.ne; i++) { g.e[i][0] = erd_edge[i][0]; g.e[i][1] = erd_edge[i][1]; }
-    {
-        long deg[MAXN] = { 0 }, seen[MAXN] = { 0 };
-        for (i = 0; i < g.ne; i++) { deg[g.e[i][0]]++; deg[g.e[i][1]]++; }
-        for (i = 0; i < g.ne; i++) {
-            g.ofr0[i] = ((double)(seen[g.e[i][0]]++ + 1) / (double)(deg[g.e[i][0]] + 1)
-                         - 0.5) * 0.8;
-            g.ofr1[i] = ((double)(seen[g.e[i][1]]++ + 1) / (double)(deg[g.e[i][1]] + 1)
-                         - 0.5) * 0.8;
-        }
-    }
     g.straight = 0;
     frozen_part(&g);
 
