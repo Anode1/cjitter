@@ -18,13 +18,13 @@
 #undef main
 
 #define MAXKEY 512
-#define STEP   22.0   /* canvas units of the largest table move per film frame */
+#define STEP   44.0   /* canvas units of the largest table move per film frame */
 #define MINVIS 6.0    /* canvas units below which an improvement is invisible at 640px and
                        * merges into the next glide instead of popping in one frame */
-#define MAXF   210    /* frame budget; tweens scale down proportionally to fit. Sized for the
-                       * reader, not the search: at 25 frames a second this is about eight
+#define MAXF   105    /* frame budget; tweens scale down proportionally to fit. Sized for the
+                       * reader, not the search: at 33 frames a second this is about four
                        * seconds of motion, and a film nobody watches to the end shows nothing.
-                       * The floor is one frame per improvement, so a run with many more
+                       * The floor is one frame per kept improvement, so a run with many more
                        * improvements than this gets a jumpier film rather than a longer one. */
 
 #define BAND   110    /* the caption's height above the canvas, in canvas units */
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
      * refinement. The tween count per kept gap is proportional to the largest single-table
      * move in it, so a long glide gets many small steps and nothing ever teleports; if the
      * total overruns the frame budget every gap scales down proportionally, and a visible
-     * move keeps at least two frames so it reads as motion, not as a jump. */
+     * move keeps at least one frame. */
     {
         static long tw[MAXKEY], kept[MAXKEY];
         long total = 0, nkept = 0, gap;
@@ -181,7 +181,7 @@ int main(int argc, char **argv)
         if (total > MAXF)
             for (gap = 0; gap + 1 < nkept; gap++) {
                 tw[gap] = tw[gap] * MAXF / total;
-                if (tw[gap] < 2) tw[gap] = 2;
+                if (tw[gap] < 1) tw[gap] = 1;
             }
         for (gap = 0; gap + 1 < nkept; gap++)
             for (t = 0; t < tw[gap]; t++) {

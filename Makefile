@@ -58,7 +58,7 @@ profile: station
 # smoothed replay of its improvements. The README's moving figure. Not part of check: it
 # needs rsvg-convert and ImageMagick, and its output is a committed fixture.
 #
-# Length is a deliberate constraint, not a by-product: about ten seconds, roughly eight of
+# Length is a deliberate constraint, not a by-product: about six seconds, roughly four of
 # motion at 33 frames a second and two and a half holding the final layout. A README figure
 # competes with the reader's scroll, and erd_movie.c's MAXF is the other half of the budget.
 # Delays below 3 hundredths are not worth trying; browsers clamp them. The first frame
