@@ -4,6 +4,7 @@ prints the median q per cell (1 = every node held, 0 = none).
 
     python3 profile.py [--d 0.02] [--dirs 16] [--L fit|median|rsqrt] [--layouts hand,neato,prism,dot]
                        [--only NAME,NAME,...] [--ci] [--save DIR] [--station ../../station] [--md | --tex]
+                       [--corpora NAME:stem,...]   default WikiPathways:hs,Reactome:sbgn,BPMN:bpmn
     python3 profile.py --sweep [--only ...]        the radius sweep, d in 0.005 0.01 0.02 0.05
 
 --tex prints the paper's layout instead: one block per corpus, a column per layout kind,
@@ -119,6 +120,7 @@ if __name__ == '__main__':
         elif a[0] == '--ci': ci = True; a = a[1:]
         elif a[0] == '--save': save = a[1]; os.makedirs(save, exist_ok=True); a = a[2:]
         elif a[0] == '--sweep': sweep = True; a = a[1:]
+        elif a[0] == '--corpora': CORPORA = [tuple(x.split(':')) for x in a[1].split(',')]; a = a[2:]
         else: sys.exit('unknown argument ' + a[0])
     energies = [e for e in ENERGIES if not only or e[0] in only]
     if only and len(energies) != len(only): sys.exit('unknown energy in --only')
