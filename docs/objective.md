@@ -9,8 +9,8 @@ A connector passing through a table is scored by the *length of the overlap*, no
 count: a count is flat under small moves, so the search has nothing to follow and walks at
 random on the plateau. Where a count is unavoidable, keep a continuous term beside it.
 Crossings in the diagram example stay a count, and connector length is the continuous term
-under them; the plateau is still visible in the film, where the count stops falling at
-evaluation 1038 of 8000 and the rest of the budget shortens connectors.
+beside them; the plateau is still visible in the film, where the count stops falling at
+evaluation 2842 of 8000 and the rest of the budget shortens connectors.
 
 ## Score the medium the reader sees
 
@@ -31,11 +31,24 @@ different things. The diagram objective priced crossings at 100 and raw connecto
 score was a few dozen crossings at 100 against sixty connectors of a few hundred units each:
 at the search's own optimum, length was 81 to 90 percent of everything that varied, and the
 layout it picked was the one length preferred, 47 crossings on screen under a film caption
-that counted 23. The fix is a unit, not a weight: length is now scored in canvas
-half-perimeters, under 60 for the whole drawing, so no length can outweigh one crossing and
-the tiers are lexicographic in fact. Over the same fifteen seeds the drawings climb returns
-went from 39 visible crossings to 25. Tier by orders of magnitude, then go and look at what
-the tiers actually weigh at the answer.
+that counted 23. The opposite tiering failed the opposite way: with a crossing priced above
+any length, the search sent tables to the corners of the canvas, where a connector along the
+border crosses nothing. The score that holds is priced in one unit from the diagram itself:
+a crossing costs one connector of the frozen edges' mean length, and each connector costs
+its length squared over that mean, so a nudge is cheap, an exile costs a dozen crossings,
+and nothing is a tie-breaker. Over the same fifteen seeds the drawings climb returns went
+from 39 visible crossings to 26. Tier if you must, then go and look at what the tiers
+actually weigh at the answer, and look at the drawing.
+
+## Price what the person keeps
+
+Length alone, at any price, wedged every new table into the nearest cluster at the repair's
+12 units with a quarter of the canvas empty, because the repair's gap is the tightest pair
+in the maintainer's diagram and not their habit: the median nearest clearance between its
+44 tables is 53. A room term, the shortfall of a new table's clearance below 50, priced at
+three units of connector per unit, is what backs a table off its neighbours. The number came
+from measuring the diagram, and the term exists because the drawing was wrong while the
+score was falling.
 
 ## Count what the reader sees
 

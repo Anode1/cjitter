@@ -115,13 +115,14 @@ callback; the reason it is not a penalty term is at the `cjitter_repair` typedef
 database migration, placed onto a frozen diagram whose other 34 tables a person already knows.
 The graph is a real anonymized production schema, and the objective routes every connector
 orthogonally before reading it, which is what none of the published pinning implementations
-do, then counts the crossings a reader sees, with connector length breaking ties. A
+do, then prices every crossing a reader sees at one connector of the diagram's mean length,
+room at the maintainer's own clearance, and each connector at its length squared. A
 2,000-draw null in that directory shows the maintainer's own placement separable from a
 random draw by nothing but not overlapping, so this demonstrates the library on a real graph
 and is not a benchmark for an objective. The film is climb settling the migration, one table
 per proposal, captioned by the crossings and the connector length under tables as they fall.
-It ends at 28 crossings on screen; the same router draws the maintainer's own placement with
-32, and the fifteen-seed median is 24:
+It ends at 26 crossings on screen, where the same router draws the maintainer's own
+placement with 36, and fourteen of fifteen seeds end there:
 
 ![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
 

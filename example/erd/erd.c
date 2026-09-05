@@ -13,15 +13,24 @@
  * and the OBJECTIVE reads the routed connectors, in tiers that are lexicographic in fact and
  * not only in name:
  *   a connector passing through a table   the length of the overlap, x100
- *   connectors crossing each other        every crossing a reader can see, x100
- *   connector length                      the total, in canvas half-perimeters, x1
- * The length unit is the tiering. In raw canvas units the whole drawing is tens of thousands
- * and a search shortens connectors by adding crossings, which measured as 81 to 90 percent of
- * what varied at every returned layout; divided by cw + ch the whole drawing's length is
- * under 60 and can never outweigh one crossing. A crossing counts when a reader sees it:
+ *   connectors crossing each other        every crossing a reader can see, at L0 each
+ *   room                                  a new table's clearance short of ROOM, per pair,
+ *                                         at ROOM_W per unit
+ *   connector length                      per connector, length squared over L0
+ * L0 is the frozen edges' mean centre-to-centre distance, measured from the diagram before
+ * any route is chosen: a crossing costs one connector of mean length, and a connector of
+ * mean length costs its length. Squaring is the placement rule a person follows: lengthening
+ * a connector a little costs little, so a crossing is avoided where a nudge will do, and a
+ * table across the canvas from its neighbour costs a dozen crossings, so no table is exiled
+ * to a corner to avoid one. Two earlier forms failed in the two opposite ways: raw length at
+ * 1 against crossings at 100 was 81 to 90 percent of what varied and the search added
+ * crossings to shorten connectors; crossings priced above any length sent tables to the
+ * corners along crossing-free border routes. A crossing counts when a reader sees it:
  * adjacent edges included, since two connectors out of one table cross each other far from
  * it as visibly as any pair, and crossings under a table excluded, since the table is drawn
- * over them. Node overlap and staying on canvas are HARD, enforced by the repair callback.
+ * over them. Room exists because length alone wedged every new table into the nearest
+ * cluster at the repair's 12 units with a quarter of the canvas empty. Node overlap and
+ * staying on canvas are HARD, enforced by the repair callback.
  * The router's quality is measured, not assumed: the run prints what it reproduces of the
  * human layout's known 0 crossings and 0 penetration, and every score means only as much as
  * that line.
@@ -53,7 +62,17 @@ typedef char erd_vector_fits[(2 * ERD_NNEW <= 64) ? 1 : -1];
  * 59 connectors of a few hundred units each outweigh a few dozen crossings at 100 apiece.
  * Length is therefore scored in canvas half-perimeters (see total_of), where the whole
  * drawing is under 60 units, and 100 per crossing is a tier again. */
-#define W_TIER      100.0   /* penetration and crossings, against length at 1 */
+#define W_TIER      100.0   /* penetration, per unit of connector inside a table */
+#define ROOM        50.0    /* clearance a new table is asked to keep, in canvas units: the
+                             * maintainer's own diagram keeps a median nearest clearance of
+                             * 53 between its 44 tables; 12 is its tightest pair */
+#define ROOM_W      3.0     /* per unit of clearance short of ROOM: three units of connector,
+                             * so a table backs off a neighbour at the cost of a longer edge */
+#define NUDGE       60.0    /* how far past the channel a routed connector's middle segment
+                             * may be pushed, per step, a third of a table's width; the old
+                             * detours were fractions of the channel, so a table across the
+                             * canvas from its neighbour could be reached along the border,
+                             * and a crossing-first score sent tables there */
 #ifndef NODE_GAP
 #define NODE_GAP    12.0    /* clearance kept between table borders, in canvas units */
 #endif
@@ -96,7 +115,9 @@ typedef struct {
 typedef struct {
     double pen;    /* connector length lying inside tables, canvas units */
     long   crs;    /* crossings a reader sees */
+    double room;   /* clearance shortfalls below ROOM, in units of ROOM, summed over pairs */
     double len;    /* connector length, canvas units */
+    double len2;   /* the sum over connectors of length squared, canvas units squared */
 } Terms;
 
 typedef struct {
@@ -113,6 +134,8 @@ typedef struct {
                                       representation diagonal-edge tools draw, instead of
                                       routed orthogonal connectors */
     Terms  kt;                     /* every term among frozen tables only, summed once */
+    double l0;                     /* the frozen edges' mean centre distance: the price of a
+                                      crossing and the unit of length squared */
     Route  rt[MAXE];               /* frozen routes fixed once; new-touching rerouted per score */
     double cw, ch;
 } Erd;
@@ -124,13 +147,14 @@ static void pos(const Erd *g, const double *v, long i, double *px, double *py)
     else { *px = v[2 * (i - g->nfixed)]; *py = v[2 * (i - g->nfixed) + 1]; }
 }
 
-/* The score of a set of terms, and the one place the tiering is written. Length is divided by
- * the canvas half-perimeter, so the longest drawing the canvas can hold scores under one
- * crossing and the tiers are lexicographic: penetration and crossings first, length only
- * among layouts that tie on both. */
+/* The score of a set of terms, in canvas units of connector, and the one place the prices
+ * are written: penetration at W_TIER per unit, a crossing at L0, room at ROOM_W per unit
+ * short, and each connector at its length squared over L0. The file's header comment has
+ * the reasoning. */
 static double total_of(const Erd *g, const Terms *t)
 {
-    return W_TIER * (t->pen + (double)t->crs) + t->len / (g->cw + g->ch);
+    return W_TIER * t->pen + g->l0 * (double)t->crs + ROOM_W * ROOM * t->room
+         + t->len2 / g->l0;
 }
 
 /* Length of segment AB lying inside rectangle i. Continuous in the table's position, which a
@@ -280,14 +304,14 @@ static long cand_cross(const Erd *g, const double *v, long ntab, const Route *rt
  * across the channel between the endpoints and one step beyond it on either side, which is
  * the nudge a person applies to a connector to clear an obstacle. The candidate with the
  * least penetration wins, length breaking ties, the earlier shape winning exact ties so the
- * choice is deterministic. Only the first NTAB tables exist for penetration and for hiding
+ * choice is deterministic. The route's own terms are penetration, crossings and length; room
+ * is the layout's, not the route's. Only the first NTAB tables exist for penetration and for hiding
  * a crossing, which is how frozen edges get routed against the frozen diagram alone. The
  * chosen route's terms are written to T. */
 static void route_edge(const Erd *g, const double *v, long a, long ntab,
                        const Route *rt, int mode, Route *r, Terms *t)
 {
     static const double TIN[5]  = { 0.15, 0.3, 0.5, 0.7, 0.85 };
-    static const double TOUT[6] = { -0.75, -0.5, -0.25, 1.25, 1.5, 1.75 };
     double ax, ay, bx, by, bestcost = 0;
     long e0 = g->e[a][0], e1 = g->e[a][1];
     int c, have = 0, nc = 24;
@@ -312,7 +336,9 @@ static void route_edge(const Erd *g, const double *v, long a, long ntab,
         *r = cand;
         t->pen = pen;
         t->crs = cand_cross(g, v, ntab, rt, &cand, a, mode);
+        t->room = 0;
         t->len = seglen(cand.px[1] - cand.px[0], cand.py[1] - cand.py[0]);
+        t->len2 = t->len * t->len;
         return;
     }
     for (c = 0; c < nc; c++) {
@@ -340,13 +366,15 @@ static void route_edge(const Erd *g, const double *v, long a, long ntab,
             cand.px[0] = xa; cand.py[0] = ay; cand.px[1] = xa; cand.py[1] = my;
             cand.px[2] = xb; cand.py[2] = my; cand.px[3] = xb; cand.py[3] = by;
             cand.np = 4;
-        } else if (c < 18) {                /* Z, vertical middle, detouring beyond it */
-            double mx = ax + TOUT[c - 12] * (bx - ax);
+        } else if (c < 18) {                /* Z, vertical middle, nudged past the channel */
+            double mx = c < 15 ? (ax < bx ? ax : bx) - (double)(c - 11) * NUDGE
+                               : (ax < bx ? bx : ax) + (double)(c - 14) * NUDGE;
             cand.px[0] = ax; cand.py[0] = ya; cand.px[1] = mx; cand.py[1] = ya;
             cand.px[2] = mx; cand.py[2] = yb; cand.px[3] = bx; cand.py[3] = yb;
             cand.np = 4;
-        } else {                            /* Z, horizontal middle, detouring */
-            double my = ay + TOUT[c - 18] * (by - ay);
+        } else {                            /* Z, horizontal middle, nudged past it */
+            double my = c < 21 ? (ay < by ? ay : by) - (double)(c - 17) * NUDGE
+                               : (ay < by ? by : ay) + (double)(c - 20) * NUDGE;
             cand.px[0] = xa; cand.py[0] = ay; cand.px[1] = xa; cand.py[1] = my;
             cand.px[2] = xb; cand.py[2] = my; cand.px[3] = xb; cand.py[3] = by;
             cand.np = 4;
@@ -381,16 +409,16 @@ static void route_edge(const Erd *g, const double *v, long a, long ntab,
         }
         for (s = 0; s + 1 < cand.np; s++)
             len += fabs(cand.px[s+1] - cand.px[s]) + fabs(cand.py[s+1] - cand.py[s]);
-        cost = W_TIER * pen + len / (g->cw + g->ch);
+        cost = W_TIER * pen + len * len / g->l0;
         if (!have || cost < bestcost + 1e-9) {
             long crs;
             /* crossings are the expensive part of a candidate's price, so they are only
              * computed when penetration and length alone have not already lost */
             crs = cand_cross(g, v, ntab, rt, &cand, a, mode);
-            cost += W_TIER * (double)crs;
+            cost += g->l0 * (double)crs;
             if (!have || cost < bestcost) {
                 have = 1; bestcost = cost; *r = cand;
-                t->pen = pen; t->crs = crs; t->len = len;
+                t->pen = pen; t->crs = crs; t->room = 0; t->len = len; t->len2 = len * len;
             }
             /* A clean candidate among the in-channel shapes ends the search: those shapes
              * share their Manhattan length, the detours are longer, and an equal-cost later
@@ -446,15 +474,51 @@ static long routes_cross(const Erd *g, const double *v, long ntab,
 static void frozen_part(Erd *g)
 {
     Terms t;
-    long a;
-    g->kt.pen = 0; g->kt.crs = 0; g->kt.len = 0;
+    long a, nf = 0;
+    g->kt.pen = 0; g->kt.crs = 0; g->kt.room = 0; g->kt.len = 0; g->kt.len2 = 0;
     for (a = 0; a < g->ne; a++)
         g->enew[a] = g->e[a][0] >= g->nfixed || g->e[a][1] >= g->nfixed;
+    /* The unit of length squared: the frozen edges' mean centre-to-centre Manhattan
+     * distance, fixed before any route is chosen, since a route's price depends on it. */
+    g->l0 = 0;
+    for (a = 0; a < g->ne; a++)
+        if (!g->enew[a]) {
+            g->l0 += fabs(g->x[g->e[a][0]] - g->x[g->e[a][1]])
+                   + fabs(g->y[g->e[a][0]] - g->y[g->e[a][1]]);
+            nf++;
+        }
+    g->l0 = nf ? g->l0 / (double)nf : 1;
     for (a = 0; a < g->ne; a++)
         if (!g->enew[a]) {
             route_edge(g, NULL, a, g->nfixed, g->rt, 0, &g->rt[a], &t);
             g->kt.pen += t.pen; g->kt.crs += t.crs; g->kt.len += t.len;
+            g->kt.len2 += t.len2;
         }
+}
+
+/* Room: how far each new table's clearance from every other table falls short of ROOM, in
+ * units of ROOM per pair, each new-new pair once. Clearance is the larger of the two axis
+ * gaps, as min_clearance measures it, so it is 0 at touching borders and negative inside
+ * an overlap, which the repair never returns. The pairs among frozen tables are constant
+ * and left out. */
+static double room_term(const Erd *g, const double *v)
+{
+    double sum = 0;
+    long k, i;
+    for (k = g->nfixed; k < g->n; k++) {
+        double px, py;
+        pos(g, v, k, &px, &py);
+        for (i = 0; i < g->n; i++) {
+            double qx, qy, gx, gy, c;
+            if (i == k || i > k) continue;        /* frozen i, or a new i counted at its turn */
+            pos(g, v, i, &qx, &qy);
+            gx = fabs(px - qx) - (g->w[k] + g->w[i]) / 2;
+            gy = fabs(py - qy) - (g->h[k] + g->h[i]) / 2;
+            c = gx > gy ? gx : gy;
+            if (c < ROOM) sum += (ROOM - c) / ROOM;
+        }
+    }
+    return sum;
 }
 
 /* The objective's terms at layout V, under the routing the score reads: frozen routes as
@@ -466,13 +530,14 @@ static void terms(Erd *g, const double *v, Terms *t)
     long a, i;
     int s;
     *t = g->kt;
+    t->room = room_term(g, v);
     /* the migration's edges, routed in index order, each seeing every fixed connector and
      * the migration edges already routed this evaluation; a route's crossings are with the
      * routes before it, so no pair is priced twice */
     for (a = 0; a < g->ne; a++)
         if (g->enew[a]) {
             route_edge(g, v, a, g->n, g->rt, 1, &g->rt[a], &et);
-            t->pen += et.pen; t->crs += et.crs; t->len += et.len;
+            t->pen += et.pen; t->crs += et.crs; t->len += et.len; t->len2 += et.len2;
         }
     /* the fixed connectors, penetrating any new table parked on top of them */
     for (a = 0; a < g->ne; a++) {
@@ -838,9 +903,10 @@ int main(int argc, char **argv)
     printf("A real schema, anonymized; see data/PROVENANCE.md. Only the new tables move.\n"
            "The same experiment runs twice: first with straight diagonal edges, the\n"
            "representation diagonal-edge tools draw, then with orthogonal routed\n"
-           "connectors, what the reader actually sees. Objective in both: penetration\n"
-           "and crossings at 100, length at 1 per canvas half-perimeter, so length only\n"
-           "ever breaks a tie. Lower is better.\n");
+           "connectors, what the reader actually sees. Objective in both, in units of\n"
+           "connector: penetration at 100 per unit, a crossing at one mean connector\n"
+           "(%.0f), room short of %g units at %g per unit, and each connector at its\n"
+           "length squared over the mean. Lower is better.\n", g.l0, ROOM, ROOM_W);
     printf("One proposal moves %ld of the %ld variables%s.\n", t.block, nv,
            t.block >= nv ? " (the whole vector)" : ", so a table at a time");
 
@@ -882,8 +948,8 @@ int main(int argc, char **argv)
             for (k = 0; k < nnew; k++)
                 printf("  %s at (%.0f, %.0f)\n", erd_name[g.nfixed + k], x[2*k], x[2*k+1]);
             terms(&g, x, &tm);
-            printf("as scored: %ld crossings, %.6g penetration, length %.6g\n",
-                   tm.crs, tm.pen, tm.len);
+            printf("as scored: %ld crossings, %.6g penetration, crowding %.6g, length %.6g\n",
+                   tm.crs, tm.pen, tm.room, tm.len);
             printf("closest two tables: %.6g units apart (the repair keeps %g)\n",
                    min_clearance(&g, x), NODE_GAP);
         }

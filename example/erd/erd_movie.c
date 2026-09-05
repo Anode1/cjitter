@@ -19,7 +19,7 @@
 
 #define MAXKEY 512
 #define STEP   44.0   /* canvas units of the largest table move per film frame */
-#define MINVIS 6.0    /* canvas units below which an improvement is invisible at 640px and
+#define MINVIS 20.0   /* canvas units below which an improvement is invisible at 640px and
                        * merges into the next glide instead of popping in one frame */
 #define MAXF   105    /* frame budget; tweens scale down proportionally to fit. Sized for the
                        * reader, not the search: at 33 frames a second this is about four
@@ -81,9 +81,9 @@ static void frame(const char *dir, long idx, Erd *g, const double *v,
     printf("<text x='%g' y='40' text-anchor='middle' font-size='32' fill='#444'>"
            "climb, one table per proposal, seed 1: evaluation %ld, score %.6g</text>\n",
            (g->cw + 10) / 2, eval, total_of(g, t));
-    printf("<text x='%g' y='90' text-anchor='middle' font-size='40' fill='#111'>"
-           "%ld crossings, %.0f units of connector under a table, length %.0f</text>\n",
-           (g->cw + 10) / 2, t->crs, t->pen, t->len);
+    printf("<text x='%g' y='90' text-anchor='middle' font-size='38' fill='#111'>"
+           "%ld crossings, %.0f units of connector under a table, crowding %.1f, "
+           "length %.0f</text>\n", (g->cw + 10) / 2, t->crs, t->pen, t->room, t->len);
     printf("<g transform='translate(0,%d)'>\n", BAND);
     svg_panel(g, v, 5);
     printf("</g>\n</svg>\n");

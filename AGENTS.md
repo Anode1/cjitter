@@ -137,18 +137,22 @@ was true of the human's layout and false of every layout a search returned: the 
 drive penetration to zero, and what was left was a few dozen crossings at 100 against sixty
 connectors of a few hundred units each, so length was 81 to 90 percent of everything that
 varied and the answer was the one length preferred. The decomposition is cheap to print and
-nobody printed it for a year; the film's caption now prints it on every frame. The fix was a
-unit: length in canvas half-perimeters, under 60 for the whole drawing, so the tiers are
-lexicographic in fact. In the same pass the crossing count stopped excluding adjacent pairs,
-which had hidden half the crossings on screen, and started excluding crossings under a table,
-which nobody sees. docs/objective.md carries both lessons.
+nobody printed it for a year; the film's caption now prints it on every frame. Crossings
+priced above any length failed the other way, tables exiled to the corners along
+crossing-free border routes, and length without a room term wedged them into clusters at
+the repair's 12 units. The score that holds is in one unit from the diagram: a crossing at
+the frozen edges' mean length, each connector at its length squared over that mean, room
+short of the maintainer's own median clearance. In the same pass the crossing count stopped
+excluding adjacent pairs, which had hidden half the crossings on screen, and started
+excluding crossings under a table, which nobody sees. docs/objective.md carries the lessons.
 
 Score the medium the reader sees. The ERD edges are routed orthogonally (L and Z shapes, the
 middle segment sliding across the channel) before anything is measured, because that is what
 the tool draws, and the router is calibrated against the one certain fact: the human's layout
-achieved 0 crossings and 0 penetration on screen. The run prints the router's shortfall (27
-and 323 at present, with border anchoring, per-edge attachment slots, and sequential routing
-aware of every connector already placed), and no score comparison against the human means
+achieved 0 crossings and 0 penetration on screen. The run prints the router's shortfall (36
+crossings and 0 penetration at present, with border anchoring, per-edge attachment slots,
+nudged middle segments and sequential routing aware of every connector already placed), and
+no score comparison against the human means
 more than that line allows. Closing the remainder, more bends and a grid router, is the open
 problem the router owns.
 
@@ -261,13 +265,13 @@ is why a visible defect survived every gate, four reviews and a paper.
 
        labels    climb 12.8 -> 0, anneal 128 -> 0, ga 1.38 -> 0. All three reach exactly 0
                  on all 7 seeds, range 0: the clean layout, which nothing reached before.
-       erd routed  climb 5310 -> 2407 (range 11276 -> 401), anneal 6008 -> 3007,
-                 ga 4608 -> 5208 (range 16603 -> 18600); a routed score is 100 per
-                 crossing plus a few units of length, so read 53 -> 24 crossings.
-       erd straight  climb 69360 -> 48873, anneal 96897 -> 48778, ga 50471 -> 67803.
+       erd routed  climb 83734 -> 55922 (range 43136 -> 5249), anneal 74543 -> 56323,
+                 ga 62321 -> 75697 (range 14055 -> 24309); the drawings behind climb's
+                 blocked scores have 26 crossings on fourteen seeds of fifteen.
+       erd straight  climb 132981 -> 83143, anneal 119654 -> 79649, ga 82633 -> 110898.
 
    Two things to read there. The single-point searches gain most, and their spread over seeds
-   collapses, which matters more than the median: climb's routed range of four crossings says
+   collapses, which matters more than the median: climb's routed range of 5249 says
    it finds nearly the same answer from every seed. And the ga does not gain, and on the erd
    loses, because only its mutation is blocked while crossover still blends every coordinate;
    that is a weak variant, not a bug, and it is reported rather than exempted.
@@ -277,8 +281,8 @@ is why a visible defect survived every gate, four reviews and a paper.
    tests/cli.sh and quoted in README.md is the number it always was and no re-measurement was
    needed. The film is the exception and the reason the block exists: `erd_movie` sets block 2
    outright, because at the default a proposal displaces all ten tables and the reader watches
-   the migration teleport 30 times instead of tables finding their neighbours. Rebuilt it is
-   126 improvements and 28 crossings against 45; the panel's median is 24.
+   the migration teleport 35 times instead of tables finding their neighbours. Rebuilt it is
+   139 improvements and 26 crossings against 40.
 
    `auto` stays climb, and the reason is now written down where it was missing. The migration
    benchmark in ~/articles/cjitter ranks climb the budget-efficient method (it separates from
@@ -300,10 +304,10 @@ is why a visible defect survived every gate, four reviews and a paper.
    magnitude and are not comparable.
 
 4. **The router**, until it reproduces the human layout's 0 crossings and 0 penetration. The
-   current one (two bends, border anchors at per-edge attachment slots, sequential and aware
-   of every connector already placed) measures 32 and 323 on that layout, and the run prints
-   the number so nobody mistakes the floor for the human's. What remains: more bends; a grid
-   router.
+   current one (two bends, the middle segment nudged up to three thirds of a table width past
+   the channel, border anchors at per-edge attachment slots, sequential and aware of every
+   connector already placed) measures 36 and 0 on that layout, and the run prints the number
+   so nobody mistakes the floor for the human's. What remains: more bends; a grid router.
    Every score comparison against the human sharpens exactly as fast as this number falls.
 5. **An anchor term**, which turns the incremental case into the general one. Let the frozen tables
    move, penalised by squared displacement from their old positions, and one weight then
