@@ -5,6 +5,11 @@ d = 0.02, 16 directions. Corpora and binary as in manifest.txt. Generator:
 `align_controls.py <corpus> <out> jitter|snapped <pitch> <seed>`. Box sizes, node counts and
 each diagram's bounding box are preserved by both controls.
 
+> Note added 2026-09-05: the d/2 bound derived below holds for axial moves. With sixteen
+> directions the smallest axial component of a move is 0.38 d, so a box is released once
+> its offset exceeds 0.19 d; the paper states the bound that way. The conclusion of this
+> file (half a pitch is far below the bound) stands.
+
 ## Pitch detection
 
 Coordinates within 2% of a multiple of the candidate pitch:
