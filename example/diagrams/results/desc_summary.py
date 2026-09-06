@@ -7,13 +7,13 @@ stops below 0.9. Run from this directory: python3 desc_summary.py > desc.md
 """
 import csv, os, statistics as st
 HERE = os.path.dirname(os.path.abspath(__file__))
-print('| corpus | energy | cap climb | cap random | removed climb | removed random | >=12/15 | q converged | reference < 0.9 |')
-print('|---|---|---|---|---|---|---|---|---|')
+print('| corpus | energy | cap climb | cap random | removed climb | removed random | >=12/15 | q converged | reference < 0.9 | reference < 0.95 |')
+print('|---|---|---|---|---|---|---|---|---|---|')
 for c in ['hs', 'sbgn', 'bpmnr', 'bpmn']:
     for e in ['COL', 'COA1', 'S', 'COF']:
         p = os.path.join(HERE, 'desc', '%s_%s.csv' % (c, e))
         if not os.path.exists(p): continue
         r = list(csv.DictReader(open(p)))
         m = lambda k: st.median(float(x[k]) for x in r)
-        print('| %s | %s | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f |' % (c, e, m('cap_climb'), m('cap_random'), m('rho_climb'), m('rho_random'),
-              sum(int(x['wins']) >= 12 for x in r) / len(r), m('q_converged'), sum(float(x['q_converged']) < 0.9 for x in r) / len(r)))
+        print('| %s | %s | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f |' % (c, e, m('cap_climb'), m('cap_random'), m('rho_climb'), m('rho_random'),
+              sum(int(x['wins']) >= 12 for x in r) / len(r), m('q_converged'), sum(float(x['q_converged']) < 0.9 for x in r) / len(r), sum(float(x['q_converged']) < 0.95 for x in r) / len(r)))
