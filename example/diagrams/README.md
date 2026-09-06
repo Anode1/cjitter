@@ -6,7 +6,7 @@ weight beside crossings and overlap; it is held by overlap, and by alignment for
 base energies omit; of four tools laid out on the same graphs, the layered ones match
 that profile on every criterion but alignment and flow, where they are exact.** The paper
 that reads these tables, *Human-Made Diagram Layouts Are Not Minima of Edge-Length or
-Stress Energies*, is [articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
+Stress Energies, and Their Boxes Align Instead*, is [articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
 
 A layout tool places the boxes of a diagram by minimising a weighted sum of criteria. If
 people drew the same way, a layout a person accepted would be a local minimum of every
