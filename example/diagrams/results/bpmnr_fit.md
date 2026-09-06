@@ -101,3 +101,27 @@ weight on alignment (base C,O equal)  q
  0.500  0.362
  1.000  0.334
 FIT_BPMNR_DONE
+== bpmnr terms R,A,N,F, A3 kernel
+terms                RANF
+residual / node      0.0010
+q fitted             0.551
+q held-out (5x2)     0.633 [0.530, 0.984]
+orthogonality        0.250
+alignment            0.043
+node-edge            0.142
+flow                 0.565
+diagrams 300, nodes 6866, rows 109856
+== bpmnr terms C,O,L,S,R,A,N,F with the crossings column halved (fit/bpmnr_halfC.diffs)
+terms                COLSRANF
+residual / node      0.0002
+q fitted             0.997
+q held-out (5x2)     0.845 [0.481, 0.997]
+crossings            1.000
+overlap              -0.000
+length               0.000
+stress               -0.000
+orthogonality        -0.000
+alignment            -0.000
+node-edge            -0.000
+flow                 -0.000
+diagrams 300, nodes 6866, rows 109856

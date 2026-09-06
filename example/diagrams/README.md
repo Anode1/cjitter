@@ -1,10 +1,12 @@
 # diagrams: which aesthetic criteria hold a hand-drawn layout
 
-**A hand layout is held by overlap, by nothing that prices distance, and by alignment for
-0.52, 0.21 and 0.91 of its boxes by corpus (0.87 over the full BPMN population); of four tools laid out on the same graphs, the
-layered ones match that profile on every criterion but alignment and flow, where they are
-exact.** The paper that reads these tables, *What Holds a Hand-Drawn Diagram?*, is
-[articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
+**A hand layout is a local minimum of neither uniform edge length nor stress, at any
+weight beside crossings and overlap; it is held by overlap, and by alignment for 0.52,
+0.21 and 0.85 of its boxes by corpus (0.87 over the full BPMN population), a term the
+base energies omit; of four tools laid out on the same graphs, the layered ones match
+that profile on every criterion but alignment and flow, where they are exact.** The paper
+that reads these tables, *Hand-Drawn Diagrams Are Not Minima of Edge-Length or Stress
+Energies*, is [articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter).
 
 A layout tool places the boxes of a diagram by minimising a weighted sum of criteria. If
 people drew the same way, a layout a person accepted would be a local minimum of every
@@ -45,7 +47,10 @@ reproduces, boxes left where they overlap), `prism` (neato followed by its overl
 `-Goverlap=false`), `dot` (layered, edge directions kept) and ELK layered 0.12.0 (`elkjs`,
 direction RIGHT, `data/elk_layout.py`), the engine the BPMN editors run. `station check`
 confirms a control is the same graphs with the same edges, directions and box sizes. The BPMN
-corpus is the first 300 models by id whose every edge is a BPMN flow or association: the
+corpus of the paper is a seeded random 300 of the 6,723 models in the band whose every edge
+is a BPMN flow or association (`data/bpmnr.txt`, `results/bpmn_random300.md`); the first 300
+by id (`data/bpmn.txt`), which the study was planned on, sits at the 99th percentile of
+random samples on alignment and is kept as the sample the older result files cite: the
 Academic Initiative archive is two fifths EPC, Petri net and UML models, whose flows the
 pilot's node rules turned into degree-2 nodes.
 
