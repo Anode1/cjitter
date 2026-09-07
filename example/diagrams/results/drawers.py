@@ -34,14 +34,21 @@ with open(CELL) as f:
 authors = {}
 if os.path.exists(CACHE):
     with open(CACHE) as f:
-        authors = {r['id']: r['author'] for r in csv.DictReader(f)}
+        authors = {r['id']: r['drawer'] for r in csv.DictReader(f)}
 else:
     for did in sorted(q):
         m = re.search(r'(WP\d+)_\d+$', did)
         authors[did] = fetch(m.group(1)) if m else ''
         print('fetched', did, authors[did], file=sys.stderr)
+    # The cache holds pseudonyms (drawer_001, ...), one per distinct first author, in
+    # order of first appearance by diagram id; the analysis needs only equality of drawer.
+    # Names, usernames and the occasional IP address WikiPathways records are not kept.
+    codes = {}
+    for did in sorted(authors):
+        codes.setdefault(authors[did], 'drawer_%03d' % (len(codes) + 1))
+    authors = {did: codes[a] for did, a in authors.items()}
     with open(CACHE, 'w') as f:
-        w = csv.writer(f); w.writerow(['id', 'author'])
+        w = csv.writer(f); w.writerow(['id', 'drawer'])
         for did in sorted(authors):
             w.writerow([did, authors[did]])
 

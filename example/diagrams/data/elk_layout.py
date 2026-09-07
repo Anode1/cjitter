@@ -17,7 +17,7 @@ Options. Only three are set:
     elk.randomSeed  1
 
 Everything else is ELK's own default, which is the point: the control has to be
-the algorithm as a BPMN or KIELER editor would run it, not a tuned variant.
+the algorithm as an editor embedding ELK would run it, not a tuned variant.
 RIGHT is asked for by the measurement. The seed is ELK's own default value,
 written out because layer sweep crossing minimisation reads it, and a control
 that moves between runs is not a control.

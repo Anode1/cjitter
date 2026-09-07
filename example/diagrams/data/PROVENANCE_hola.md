@@ -65,3 +65,10 @@ Private build of station.c, `direct --corpus hola.txt --weights <one-hot>
 | alignment     | 0.5000   |
 | node-edge     | 1.0000   |
 | flow          | 1.0000   |
+
+## Permission
+
+No licence is stated, so no redistribution is granted. Permission to keep the parsed
+`hola.txt` in this repository was requested from the study's authors on 7 September 2026.
+This section records the answer. If it is no, `hola.txt` goes and the fetch-and-parse
+script stands in its place.

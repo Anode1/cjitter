@@ -12,7 +12,6 @@ Q2 leads found in Klammler related work (RECALLED-from-their-text, need own veri
  - Spoenemann, Duderstadt, von Hanxleden. Evolutionary meta layout of graphs. Diagrams 2014 pp16-30 doi 10.1007/978-3-662-44043-8_3. slider weights / selection-adjusted weights.
  - Rosete-Suarez, Sebag, Ochoa-Rodriguez. A study of evolutionary graph drawing. LRI TR 1228, 1999. relative importance of metrics from user input.
  - Huang, Huang, Lin. Info Sciences 330:444-454 2016 doi 10.1016/j.ins.2015.05.028 aggregate aesthetics metric.
-TOOL STATE: WebSearch exhausted (200/200). OpenAlex daily budget exhausted (429 till midnight UTC). dblp 503. Semantic Scholar 429. Crossref API works. arXiv API works (https). Direct PDF fetch works.
 
 ## Q1/Q4 finds
 Purchase, Archambault, Kobourov, Nollenburg, Pupyrev, Wu. The Turing Test for Graph Drawing Algorithms. GD2020, arXiv 2008.04869v4 (read). 9 graphs (15-108 nodes), 4 human drawers (GD researchers), 4 algorithms (yEd/GraphViz FD, MDS/stress, circular, orthogonal). Supplementary https://www.dcs.gla.ac.uk/~hcp/GD2020/ LIVE, directory listing = JPEG images only (g{i}d{k}.jpg human, g{i}a[fd|mds|c|o].jpg algo) + READ ME.txt. NO coordinates. Finding: hand-drawn distinguishable from algorithmic overall; FD and (marginally) MDS pass; hand-drawn judged higher quality.
