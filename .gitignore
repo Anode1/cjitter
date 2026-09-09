@@ -22,3 +22,7 @@ station_ubsan
 .venv/
 __pycache__/
 example/diagrams/results/calib/
+
+# The HOLA formative drawings carry no licence on the study's page, so the parsed
+# corpus is not redistributed here; parsers/parse_hola.py rebuilds it from the source.
+example/diagrams/data/hola.txt

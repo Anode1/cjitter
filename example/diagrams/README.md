@@ -54,7 +54,10 @@ random samples on alignment and is kept as the sample the older result files cit
 Academic Initiative archive is two fifths EPC, Petri net and UML models, whose flows the
 pilot's node rules turned into degree-2 nodes.
 
-Sources, versions, hashes and licences: `data/PROVENANCE.md`. The BPMN archive is the BPM
+Sources, versions, hashes and licences: `data/PROVENANCE.md`. Two corpora are generated
+rather than committed, since their licences do not permit redistribution: the HOLA
+formative drawings (`parsers/parse_hola.py` fetches and rebuilds them) and the GD
+Collection. The BPMN archive is the BPM
 Academic Initiative collection (Zenodo 3758705, CC BY 3.0), not the non-commercial SAP
 Signavio Academic Models.
 

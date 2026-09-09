@@ -64,10 +64,13 @@ Parsed from the SVGs published at `https://data.graphlayout.net/HOLA/formative/`
 page of Kieffer, Dwyer, Marriott and Wybrow, HOLA: Human-like Orthogonal Network Layout,
 *IEEE TVCG* 22(1), 2016. See `PROVENANCE_hola.md`.
 
-**No licence is stated on that page or its site root, so no redistribution is granted.**
-Permission was requested from the study's authors on 7 September 2026; this file records
-the answer when it arrives. If it is no, `hola.txt` is removed and the fetch-and-parse
-script stands in its place. The participant codes are the study's own published
+**No licence is stated on that page or its site root, so nothing from it is
+redistributed here.** `hola.txt` is not in git. Rebuild it from the study's page with
+
+    python3 parsers/parse_hola.py data/hola.txt [--cache DIR]
+
+which fetches the 136 SVGs and the eight reference drawings, and reproduces the corpus
+the paper measured. The participant codes it carries are the study's own published
 pseudonyms.
 
 ## GD Collection, not redistributed

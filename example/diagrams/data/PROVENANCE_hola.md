@@ -66,9 +66,12 @@ Private build of station.c, `direct --corpus hola.txt --weights <one-hot>
 | node-edge     | 1.0000   |
 | flow          | 1.0000   |
 
-## Permission
+## Not redistributed
 
-No licence is stated, so no redistribution is granted. Permission to keep the parsed
-`hola.txt` in this repository was requested from the study's authors on 7 September 2026.
-This section records the answer. If it is no, `hola.txt` goes and the fetch-and-parse
-script stands in its place.
+No licence is stated on the study's page, so nothing from it is copied into this
+repository. `hola.txt` is generated, not committed:
+
+    python3 parsers/parse_hola.py data/hola.txt [--cache DIR]
+
+The script implements the parsing described above and was checked against the corpus the
+paper measured: byte for byte the same, from a cold fetch of the live page.
