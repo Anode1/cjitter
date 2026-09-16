@@ -183,8 +183,8 @@ and its limits.
 
 - [linearr](https://github.com/Anode1/linearr): least squares in C, reporting when a line is the
   wrong shape.
-- [bpnn](https://github.com/Anode1/bpnn): a backpropagation network for the tables where it is,
-  reporting when not to trust the fit.
+- [bpnn](https://github.com/Anode1/bpnn): a backpropagation network for the data a straight
+  line gets wrong, reporting when not to trust the fit.
 
 ## License
 
