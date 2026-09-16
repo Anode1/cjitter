@@ -2,6 +2,12 @@
 
 ### It warns when a search does no better than uniform random sampling at the same budget
 
+![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
+
+climb placing a database migration's new tables onto a diagram whose other 34 tables a
+person already knows, one table per proposal, captioned by the crossings and the connector
+length as they fall. `example/erd/` below.
+
 You supply a fitness function over a box of real variables, lower being better, a budget in
 evaluations, and, for hard constraints, a repair callback that moves a proposal into
 feasibility before it is scored. One call optimizes it:
@@ -122,9 +128,8 @@ random draw by nothing but not overlapping, so this demonstrates the library on 
 and is not a benchmark for an objective. The film is climb settling the migration, one table
 per proposal, captioned by the crossings and the connector length under tables as they fall.
 It ends at 24 crossings on screen, where the same router draws the maintainer's own
-placement with 31, and eleven of fifteen seeds end there, the other four at 23:
-
-![The migration's tables settling into the frozen diagram](example/erd/erd_settle.gif)
+placement with 31, and eleven of fifteen seeds end there, the other four at 23. The film is
+at the top of this page.
 
 [example/erd/README.md](example/erd/README.md) has the full walkthrough: both edge models,
 the measured tables, the calibration lines, the null, and what the block does to each
@@ -135,8 +140,8 @@ place objects, it starts from where a person placed them, 853 hand-drawn pathway
 diagrams, and asks of each aesthetic criterion whether any small move of any box would lower
 it. People draw at a minimum of overlap and nowhere near one of uniform edge length or
 stress; what holds their boxes and the standard energy omits is alignment.
-[example/diagrams/README.md](example/diagrams/README.md) has the table; the paper, *What
-Holds a Hand-Drawn Diagram?*, is
+[example/diagrams/README.md](example/diagrams/README.md) has the table; the paper, *Layouts
+Made in Diagram Editors Are Held by Alignment and Flow, Not by Edge Length or Stress*, is
 [articles/cjitter](https://github.com/Anode1/articles/tree/main/cjitter),
 [doi:10.5281/zenodo.22313827](https://doi.org/10.5281/zenodo.22313827).
 
